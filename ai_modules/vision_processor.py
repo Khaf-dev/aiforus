@@ -60,5 +60,95 @@ class VisionProcessor:
             
         return description
     
-    async def detect_object(self, image):
+    async def detect_objects(self, image) -> List[Dict]:
+        """Detect objects in image"""
+        # Run YOLO detection
+        results = self.object_detector(image, verbose=False)[0]
         
+        objects = []
+        for box in results.boxes:
+            obj = {
+                'name': self.object_detector.names[int(box.cls[0])],
+                'confidence': float(box.conf[0]),
+                'bbox': box.xyxy[0].tolist()
+            }
+            objects.append(obj)
+            
+        return objects[:10] # return top 10 objects
+    
+    async def extract_text(self, image) -> List[str]:
+        """Extract text from image using OCR"""
+        # Convert to RGB
+        rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        
+        # Read text
+        results = self.text_reader.readtext(rgb_image)
+        
+        texts = []
+        for (bbox, text, prob) in results:
+            if prob > 0.5: # confidence threshold
+                texts.append(text)
+                
+        return texts
+        
+    async def recognized_faces(self, image) -> List[Dict]:
+        """REcognize faces in image"""
+        # Conver to grayable
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        
+        # Detect faces
+        faces = self.face_detector.detectMultiScale(
+            gray,
+            scaleFactor=1.1,
+            minNeighbors=5
+        )
+        
+        recognized_faces = []
+        for (x, y, w, h) in faces:
+            # Extract face region
+            face_img = image[y:y+h, x:x+w]
+            
+            ## REcognize (simplified - would integrate with face recognition model)
+            # for now, just detect emotions
+            emotion = await self.detect_emotions(face_img)
+            
+            face_info = {
+                'bbox': [x, y, w, h],
+                'emotion': emotion,
+                'name': self._recognize_face(face_img)
+            }
+            recognized_faces.append(face_info)
+        
+        return recognized_faces
+    
+    async def _generate_caption(self, image):
+        """Generate image caption"""
+        # convert to PIL Image
+        from PIL import Image
+        pil_image = image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+        
+        # Generate caption
+        result = self.scene_describer(pil_image)[0]
+        return result['generated_text']
+    
+    async def _detect_emotion(self, face_image):
+        """Detect emotion from face"""
+        # Simplified - would use emotion detection model
+        # For now : return placeholder
+        return "neutral"
+    
+    def _recognize_face(self, face_image):
+        """Recognize face from known face"""
+        # Would implement face recognition logic
+        # For now : return unknown
+        return "Unknown"
+    
+    def _load_known_faces(self):
+        """Load known faces from database"""
+        # Implementation would load from DB
+        return {}
+    
+    def cleanup(self):
+        """Cleanup resources"""
+        if self.camera.isOpened():
+            self.camera.release()
