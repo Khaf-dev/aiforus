@@ -54,3 +54,11 @@ class VisionProcessor:
         if objects:
             obj_list = ', '.join([obj['name']for obj in objects[:5]])
             description += f"I can see {obj_list}. "
+            
+        if texts:
+            description += f"There's text that says: {''.join(texts[:2])}"
+            
+        return description
+    
+    async def detect_object(self, image):
+        
