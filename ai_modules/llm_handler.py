@@ -1,11 +1,11 @@
 import openai
-from typing import Dict, list, Any
+from typing import Dict, List, Any
 import json
 from langchain.chains import ConversationChain
-from langchain.memory import ConversatinonBufferMemory
-from langchain.llms import HuggingFacePipeline
+from langchain.memory import ConversationBufferMemory
+from langchain.lls import HuggingFacePipeline
 import torch
-from transformers import pipeline, AutoModelForCausaLLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, pipeline, AutoModelForCausaLLM, AutoTokenizer
 import os
 from dotenv import load_dotenv
 
@@ -26,7 +26,7 @@ class LLMAssistant:
             self.model = self._load_local_model()
             
         # Load conversation
-        self.memory = ConversatinonBufferMemory()
+        self.memory = ConversationBufferMemory()
         self.conversation_history = []
         
         # Predefined intents
@@ -59,7 +59,7 @@ class LLMAssistant:
             
             response = await openai.ChatCompletion.acreate(
                 model=self.model,
-                messages=[{"role": "user", "content": prompt}]
+                messages=[{"role": "user", "content": prompt}],
                 temperature=0.1
             )
             
@@ -84,4 +84,69 @@ class LLMAssistant:
     async def generate_response(self, query: str, context: Dict) -> str:
         """Generate natural language response"""
         if self.use_openai:
+            messages = [
+                {"role": "system", "content": "You are a helpful assistant for visually impaired people."},
+                {"role": "user", "content": query}
+            ]
             
+            if context:
+                messages.insert(1, {"role": "system", "content": f"Context: {json.dumps(context)}"})
+                
+            response = await openai.ChatCompletion.acreate(
+                model=self.model,
+                messages=messages,
+                temperature=0.7,
+                max_tokens=200
+            )
+            
+            return response.choices[0].message.content
+        
+        else:
+            # Local model inference
+            # For now use simplified model
+            return f"I understand your said: {query}. As a local model, my capabilities are limited."
+        
+    async def generate_scene_description(self, objects: List, texts: List, context: Dict) -> str:
+        """Generate scene natural description"""
+        prompt = f"""
+        You are describing a scene to a visually impaired person.
+        
+        Detected objects: {objects}
+        Text in scene: {texts}
+        User context: {context}
+        
+        Generate a helpful, concise desription that would help them understand their environment.
+        Focus on what's important for navigation and interaction.
+        """
+        
+        return await self.generate_response(prompt)
+    
+    def _load_local_model(self):
+        """Load Local LLM model"""
+        try:
+            # Example using HuggingFace pipeline
+            model_name = "microsoft/DialoGPT-small"
+            
+            tokenizer = AutoTokenizer.from_pretrained(model_name)
+            model = AutoModelForCausalLM.from_pretrained(model_name)
+            
+            pipe = pipeline(
+                "text-generation",
+                model=model,
+                tokenizer=tokenizer,
+                max_length=200,
+                temperature=0.7
+            )
+            
+            return HuggingFacePipeline(pipeline=pipe)
+        
+        except Exception as e:
+            print(f"Error loading local model: {e}")
+            return None
+        
+    def update_memory(self, user_input: str, assistant_response: str):
+        """Update conversation memory"""
+        self.memory.save_context(
+            {"input": user_input},
+            {"output": assistant_response}
+        )

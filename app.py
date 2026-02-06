@@ -3,7 +3,7 @@ import threading
 from datetime import datetime
 from ai_modules.vision_processor import VisionProcessor
 from ai_modules.speech_engine import SpeechEngine
-from ai_modules.llm_handler import LLMHandler
+from ai_modules.llm_handler import LLMAssistant
 from features.navigation import NavigationAssistant
 from database.db_handler import DatabaseHandler
 import config
@@ -16,7 +16,7 @@ class VisionAssistant:
         #Initialize core modules
         self.vision = VisionProcessor()
         self.speech = SpeechEngine()
-        self.llm = LLMHandler()
+        self.llm = LLMAssistant()
         self.navigation = NavigationAssistant()
         self.db = DatabaseHandler()
         
