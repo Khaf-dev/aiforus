@@ -87,3 +87,14 @@ source venv/bin/activate
 pip install -r requirements.txt
 
 ```
+
+# Configuration
+
+1. **Edit .env file with your API keys (Development Stage for testing)**
+
+```bash
+OPENAI_API_KEY=your_api_key_here
+GOOGLE_MAPS_API_KEY=your_api_key_here
+WEATHER_API_KEY=your_api_key_here
+
+```
