@@ -1,37 +1,34 @@
-# AI & Machine Learning
+# Core AI/ML
 torch
 torchvision
 transformers
 openai
-langchain
-sentence-transformers
 
 # Computer Vision
-opencv-python
+opencv-python-headless
 pillow
 easyocr
-ultralytics  # YOLO for object detection
-mediapipe
+ultralytics
 
-# Speech Processing
+# Speech processing
 speechrecognition
-pyttsx3
-pyaudio
+pyttsx
 gtts
 
 # APIs & Web
 fastapi
-uvicorn
+uvicorn[standard]
 requests
-websockets
 
 # Database
 sqlalchemy
-pymongo
-redis
+alembic
 
 # Utilities
-numpy
-pandas
 python-dotenv
 pyyaml
+numpy
+
+# Optional (comment if not needed)
+pyaudio # Might need manual installation
+geopy # For navigation features

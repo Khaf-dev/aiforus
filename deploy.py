@@ -3,7 +3,7 @@ import sys
 import subprocess
 import platform
 
-def setup_environment():
+def create_virtual_environment():
     """Create virtual environment if it doesn't exists"""
     venv_dir = 'venv'
     
@@ -196,30 +196,31 @@ def create_activation_scripts():
             
             print("Created Windows scripts: activate_env.bat, run.bat")
             
-            while: # Linux/Mac
-                # Create activation script for Unix
-                with open("activate_env.sh", "w") as f:
-                    f.write("""#!/bin/bash
-                            echo "Activating Virtual Environment..."
-                            source venv/bin/activate
-                            echo "Environment activated!"
-                            echo ""
-                            echo "To run the application: python app.py"
-                            echo ""
-                            exec $SHELL
-                            """)
-                    os.chmod("activate_env.sh", 0o755)
+    else: # Linux/Mac
+        # Create activation script for Unix
+        with open("activate_env.sh", "w") as f:
+            f.write("""#!/bin/bash
+                    echo "Activating Virtual Environment..."
+                    echo "Activating Virtual Environment..."
+                    source venv/bin/activate
+                    echo "Environment activated!"
+                    echo ""
+                    echo "To run the application: python app.py"
+                    echo ""
+                    exec $SHELL
+                    """)
+            os.chmod("activate_env.sh", 0o755)
                     
-                    # Create run script for Unix
-                with open("run.sh", "w") as f:
-                    f.write("""#!/bin/bash
-                            echo "Starting Vision Assistant...
-                            source venv/bin/activate
-                            python app.py
-                            """)
-                    os.chmod("run.sh", 0o755)
+            # Create run script for Unix
+            with open("run.sh", "w") as f:
+                f.write("""#!/bin/bash
+                    echo "Starting Vision Assistant...
+                    source venv/bin/activate
+                    python app.py
+                    """)
+                os.chmod("run.sh", 0o755)
                     
-                    print("Created Unix scripts: activate_env.sh, run.sh")
+                print("Created Unix scripts: activate_env.sh, run.sh")
         
 def check_system():
     """Check system requirements"""

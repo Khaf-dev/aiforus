@@ -1,0 +1,45 @@
+from setuptools import setup, find_packages
+
+setup(
+    name="vision-assistant",
+    version="0.0.1",
+    author="Kaffa Dev",
+    description="AI Assistant for Visually Impaired People(AIForUs)",
+    packages=find_packages(),
+    install_requires=[
+        'torch>=2.0.1',
+        'torchvision>=0.15.2',
+        'transformers>=4.31.0',
+        'openai>=0.28.1',
+        'opencv-python-headless>=4.8.0',
+        'pillow>=10.0.0',
+        'easyocr>=1.7.0',
+        'speechrecognition>=3.10.0',
+        'pyttsx3>=2.90',
+        'gtts>=2.3.2',
+        'fastapi>=0.100.0',
+        'uvicorn[standard]>=0.23.0',
+        'requests>=2.31.0',
+        'sqlalchemy>=2.0.19',
+        'python-dotenv>=1.0.0',
+        'pyyaml>=6.0',
+        'numpy>=1.24.0',
+    ],
+    python_requires='>=3.8',
+    entry_points={
+        'console_scripts':[
+            'vision-assistant=app:main',
+            'via-setup=deploy:setup_environment',
+        ],
+    },
+    classifiers=[
+        'Development Status :: 3 - Alpha',
+        'Intended Audience :: End Users/Desktop',
+        'Topic :: Adaptive Technologies',
+        'License :: OSI Approved :: MIT License',
+        'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.9',
+        'Programming Language :: Python :: 3.10',
+        'Programming Language :: Python :: 3.11',
+    ],
+)
