@@ -1,38 +1,7 @@
-# Vision Assistant untuk Tunanetra (Visually Impaired) DEVELOPMENT STAGE
-
-Aplikasi AI Automation dan Assistant untuk membantu penyandang disabilitas tunanetra.
-
-## Fitur Utama
-
-1. **Deskripsi Lingkungan**: Menggunakan computer vision untuk mendeskripsikan apa yang ada di depan pengguna
-2. **Pembacaan Teks**: OCR untuk membaca teks di sekitar
-3. **Navigasi**: Petunjuk arah berbasis suara
-4. **Pengenalan Objek**: Mengidentifikasi benda-benda di sekitar
-5. **Pengenalan Wajah**: Mengenali orang yang dikenal
-6. **Mode Darurat**: Mengirimkan alert ke kontak darurat
-
-## Instalasi
-
-### Metode 1: Setup Otomatis (Direkomendasikan)
-
-1. **Clone atau download proyek ini**
-
-   ```bash
-
-   git clone <repository-url>
-   cd aiforus
-
-   ```
-
-2. **Jalankan Setup script**
-
-   ```bash
-
-   python deploy.py
-
-   ```
-
-3. **Edit file .env dengan API keys Anda (Still in the development stage)**
+# Vision Assistant for Visually Impaired (Development Stage)
 
 
-4. **Jalankan Aplikasi**
+![Python](https://img.shields.io/badge/Python-3.8%2B-blue)
+![AI](https://img.shields.io/badge/AI-Computer%20Vision-green)
+![Accessibility](https://img.shields.io/badge/Accessibility-For%20Visually%20Impaired-orange)
+![License](https://img.shields.io/badge/License-MIT-yellow)
