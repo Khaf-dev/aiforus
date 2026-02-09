@@ -1,5 +1,5 @@
 """Database ORM Models for Vision Assistant"""
-from sqlalchemy import Column, String, DateTime, Integer, Float, Boolean, Text
+from sqlalchemy import Column, String, DateTime, Integer, Float, Boolean, Text, JSON
 from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime
 
@@ -14,11 +14,13 @@ class User(Base):
     user_id = Column(String, unique=True, index=True)
     name = Column(String)
     email = Column(String, unique=True, index=True)
+    disability_type = Column(String, default="visually_impaired")
     language = Column(String, default="en")
     speech_rate = Column(Integer, default=150)
+    preferences = Column(JSON)  # Store user preferences as JSON
+    emergency_contacts = Column(JSON)  # Store emergency contacts as JSON
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    preferences = Column(Text)  # JSON stored as text
 
 
 class SceneMemory(Base):

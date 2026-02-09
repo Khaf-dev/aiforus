@@ -1,4 +1,4 @@
-import openai
+from openai import OpenAI
 from typing import Dict, List, Any
 import json
 import torch
@@ -19,11 +19,18 @@ class LLMHandler:
         
         self.use_openai = use_openai
         self.model = None
+        self.client = None
         
         if use_openai:
-            openai.api_key = os.getenv("OPENAI_API_KEY", "")
-            self.model = "gpt-3.5-turbo"
-            logger.info("Using OpenAI for LLM")
+            # Initialize OpenAI client with API key from environment
+            api_key = os.getenv("OPENAI_API_KEY", "")
+            if api_key:
+                self.client = OpenAI(api_key=api_key)
+                self.model = "gpt-3.5-turbo"
+                logger.info("Using OpenAI for LLM")
+            else:
+                logger.warning("OpenAI API key not found, falling back to local model")
+                self.use_openai = False
         else:
             logger.info("Using local model for LLM")
         
@@ -32,12 +39,13 @@ class LLMHandler:
         
         # Predefined intents
         self.intents = {
-            'describe_scene': ['describe', 'what do you see', r'what\s around'],
+            'describe_scene': ['describe', 'what do you see', 'what around'],
             'read_text': ['read', 'what does it say', 'text'],
             'recognize_objects': ['objects', 'what things', 'identify'],
             'navigate': ['go to', 'navigate', 'directions to', 'how to get to'],
             'recognize_people': ['who is this', 'identify person', 'do you know this person'],
             'emergency': ['help', 'emergency', 'danger', 'call for help'],
+            'exit': ['goodbye', 'bye', 'exit', 'quit', 'stop', 'turn off', 'shut down', 'close'],
             'general_questions': ['what', 'how', 'why', 'when', 'where']
         }
         
@@ -48,7 +56,7 @@ class LLMHandler:
             context = {}
         
         try:
-            if self.use_openai and self.model:
+            if self.use_openai and self.client and self.model:
                 # Use GPT for intent recognition
                 prompt = f"""
                 User command: {command}
@@ -59,7 +67,7 @@ class LLMHandler:
                 Return JSON format: {{"action": "action_name", "parameters": {{}}}}
                 """
                 
-                response = openai.ChatCompletion.create(
+                response = self.client.chat.completions.create(
                     model=self.model,
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.1,
@@ -97,13 +105,13 @@ class LLMHandler:
             context = {}
         
         try:
-            if self.use_openai and self.model:
+            if self.use_openai and self.client and self.model:
                 messages = [
                     {"role": "system", "content": "You are a helpful assistant for visually impaired people."},
                     {"role": "user", "content": query}
                 ]
                 
-                response = openai.ChatCompletion.create(
+                response = self.client.chat.completions.create(
                     model=self.model,
                     messages=messages,
                     temperature=0.7,

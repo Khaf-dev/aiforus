@@ -36,4 +36,4 @@ accessibility:
 apis:
   openai_api_key: "${}" # Set my OpenAI API
   google_maps_key: "${}" # Set my Google Maps API Key
-  weather_api_key: "${}"
+  weather_api_key: "${}" # Set my Weather API Key here

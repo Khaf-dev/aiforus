@@ -20,16 +20,9 @@ class VisionProcessor:
             self.object_model = YOLO('yolov8n.pt')  # Lightweight YOLOv8 model
             self.text_reader = easyocr.Reader(['en'])
             
-            # Use image-text-to-text instead of deprecated image-to-text
-            try:
-                self.scene_describer = pipeline(
-                    "image-text-to-text",
-                    model="nlpconnect/vit-gpt2-image-captioning"
-                )
-            except Exception:
-                # Fallback: use visual question answering
-                self.scene_describer = None
-                logger.warning("Scene describer pipeline not available, using fallback")
+            # Scene describer is optional - use fallback for now
+            self.scene_describer = None
+            logger.info("Scene describer will use manual inference (no pretrained pipeline)")
             
             # Face detector
             self.face_detector = cv2.CascadeClassifier(

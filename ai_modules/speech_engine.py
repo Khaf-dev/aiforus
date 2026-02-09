@@ -11,6 +11,10 @@ class SpeechEngine:
     def __init__(self, language="en"):
         print("Initializing Speech Engine...")
         
+        # Configuration (set before setup_tts)
+        self.language = language
+        self.speech_rate = 150  # words per minute
+        
         # Initialize TTS engine
         self.tts_engine = pyttsx3.init()
         self.setup_tts()
@@ -18,10 +22,6 @@ class SpeechEngine:
         # initialize STT recognizer
         self.recognizer = sr.Recognizer()
         self.microphone = sr.Microphone()
-        
-        # Configuration
-        self.language = language
-        self.speech_rate = 150 # words per minute
         
         # Adjust for ambient noise
         with self.microphone as source:
