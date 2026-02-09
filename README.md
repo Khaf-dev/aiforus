@@ -354,7 +354,7 @@ This project is licensed under the MIT License - see [LICENSE](LICENSE) file for
 
 ## Support
 
-- 📧 Email: support@visionassistant.dev
+- 📧 Email: rifyatkaffa@gmail.com
 - 💬 GitHub Issues: [Report bugs](https://github.com/Khaf-dev/aiforus/issues)
 - 📚 Documentation: [Full docs](documentation/)
 - 🐛 Bug reports: Include OS, Python version, error logs
