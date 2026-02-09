@@ -10,7 +10,7 @@ The **AI-Powered Vision Assistant for Visually Impaired** has been successfully 
 
 ### Core Architecture
 
-- Main Application: `app.py` - VisionAssistant class with async event loop
+- **Main Application**: `app.py` - VisionAssistant class with async event loop
 - **Configuration**: `config.yaml` - YAML-based configuration with all settings
 - **Environment Template**: `.env.example` - Template for environment variables
 
