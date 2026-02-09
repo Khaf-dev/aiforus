@@ -5,29 +5,9 @@ from datetime import datetime
 import json
 import os
 import logging
+from .models import Base, User, ConversationHistory, SceneMemory
 
 logger = logging.getLogger(__name__)
-
-Base = declarative_base()
-
-class User(Base):
-    __tablename__ = 'users'
-    
-    id = Column(Integer, primary_key=True)
-    name = Column(String)
-    disability_type = Column(String)
-    preferences = Column(JSON) # Store user preferences as JSON
-    emergency_contacts = Column(JSON)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    
-class ConversationHistory(Base):
-    __tablename__ = 'conversations'
-    
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer)
-    user_input = Column(String)
-    assistant_response = Column(String)
-    timestamp = Column(DateTime, default=datetime.utcnow)
     
 class DatabaseHandler():
     def __init__(self, db_path='vision_assistant.db'):
