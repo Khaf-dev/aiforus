@@ -32,3 +32,4 @@ numpy
 # Optional (comment if not needed)
 pyaudio # Might need manual installation
 geopy # For navigation features
+langchain
