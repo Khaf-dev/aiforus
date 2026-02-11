@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.8+](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![Version: 1.1.0](https://img.shields.io/badge/Version-1.1.0-green.svg)](documentation/RELEASE_v1.1.md)
-[![Status: Stable Release](https://img.shields.io/badge/Status-Stable%20Release-brightgreen)]()
+[![Status: Stable Release](https://img.shields.io/badge/Status-Development%20Stage-brightgreen)]()
 
 ## 🌟 Now With v1.1 Features!
 
