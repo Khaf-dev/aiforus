@@ -110,7 +110,7 @@ python app.py --lang=es
 - "Read any text" / "Detect objects"
 - "Identify people" / "Where am I?"
 
-[See All 100+ Commands](documentation/VOICE_COMMANDS.md)
+[See All 100+ Commands](documentation/v.1.1/VOICE_COMMANDS.md)
 
 ## System Requirements
 
@@ -348,7 +348,7 @@ response = await llm.generate_response(query)
 
 ## Contributing
 
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+We welcome contributions! Please see [CONTRIBUTING.md](documentation/guidelines/CONTRIBUTING.md) for guidelines.
 
 ## License
 
@@ -357,7 +357,7 @@ This project is licensed under the MIT License - see [LICENSE](LICENSE) file for
 ## Authors
 
 - **Khaf-dev** - Initial development and architecture
-- Contributors welcome! See [CONTRIBUTING.md](CONTRIBUTING.md)
+- Contributors welcome! See [CONTRIBUTING.md](documentation/guidelines/CONTRIBUTING.md)
 
 ## Acknowledgments
 
