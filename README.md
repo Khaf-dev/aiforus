@@ -422,4 +422,4 @@ A: Yes! See documentation for fine-tuning guides.
 **Made with ❤️ for accessibility and inclusion**
 
 Last Updated: February 2026  
-Version: 1.0.0
+Version: 1.1.0
