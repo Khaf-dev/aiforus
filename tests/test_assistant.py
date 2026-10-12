@@ -34,11 +34,23 @@ class StubLocation:
 
 
 class StubDetector:
-    def __init__(self, labels):
-        self.labels = labels
+    def __init__(self, items):
+        self.items = items
 
     def detect(self, frame):
-        return [Detection(label, 0.9, (0, 0, 1, 1)) for label in self.labels]
+        return [i if isinstance(i, Detection) else Detection(i, 0.9, (0, 0, 1, 1)) for i in self.items]
+
+
+HD = (720, 1280)  # frame (height, width)
+FOCAL_PX = 914.3  # 70 deg horizontal FOV at 1280x720
+
+
+def at(label, distance_m, center_x=640, real_height=None):
+    """A detection of ``label`` standing ``distance_m`` away in an HD frame."""
+    from aiforus.services.spatial import TYPICAL_HEIGHT_M
+
+    h = (real_height or TYPICAL_HEIGHT_M[label]) * FOCAL_PX / distance_m
+    return Detection(label, 0.9, (center_x - 40, 360 - h / 2, center_x + 40, 360 + h / 2))
 
 
 class StubReader:
@@ -228,16 +240,49 @@ async def test_handler_crash_is_reported_and_assistant_survives(tmp_path):
 # -- vision ------------------------------------------------------------------
 
 
-async def test_describe_scene_counts_objects_and_mentions_text(tmp_path):
-    async with Harness(tmp_path, labels=["person", "chair", "person"], texts=["KELUAR"]) as h:
+async def test_describe_scene_gives_clock_direction_and_distance(tmp_path):
+    labels = [at("person", 3), at("chair", 2, center_x=1100), at("person", 5)]
+    frame = textured_frame(size=HD)
+    async with Harness(tmp_path, frames=[frame], labels=labels, texts=["KELUAR"]) as h:
         spoken = await h.say("apa di depan")
-        assert spoken[0] == "Di depan, aku melihat 2 orang dan 1 kursi."
+        assert spoken[0] == (
+            "Kursi di jam 1, sekitar 2 meter. 2 orang di jam 12, yang terdekat sekitar 3 meter."
+        )
         assert "Ada juga tulisan" in spoken[1]
 
 
 async def test_describe_scene_in_english(tmp_path):
-    async with Harness(tmp_path, labels=["person", "person", "bus"], texts=[], language="en") as h:
-        assert (await h.say("what's in front of me"))[0] == "In front of you, I see 2 people and 1 bus."
+    labels = [at("person", 4, center_x=200), at("cup", 1.2, center_x=640, real_height=0.1)]
+    async with Harness(
+        tmp_path, frames=[textured_frame(size=HD)], labels=labels, texts=[], language="en"
+    ) as h:
+        assert (await h.say("what's in front of me"))[0] == (
+            "Cup at 12 o'clock, about 1 meter. Person at 11 o'clock, about 4 meters."
+        )
+
+
+async def test_describe_scene_limits_and_summarises_the_rest(tmp_path):
+    labels = [at("person", d, center_x=640) for d in (3, 4)] + [
+        at(label, 2, center_x=x)
+        for label, x in [("chair", 100), ("bench", 300), ("dog", 900), ("car", 1200), ("bottle", 700)]
+    ]
+    async with Harness(tmp_path, frames=[textured_frame(size=HD)], labels=labels, texts=[]) as h:
+        h.settings.vision.max_objects_spoken = 3
+        spoken = await h.say("benda apa")
+        assert spoken[0].endswith("Ada juga 4 benda lain.")
+        assert spoken[0].count(" di jam ") == 3
+
+
+async def test_object_under_one_meter(tmp_path):
+    labels = [at("cup", 0.6), at("cup", 0.8)]
+    async with Harness(tmp_path, frames=[textured_frame(size=HD)], labels=labels, texts=[]) as h:
+        assert await h.say("benda apa") == ["2 cangkir di jam 12, yang terdekat kurang dari 1 meter."]
+
+
+async def test_object_cut_off_by_frame_is_very_close(tmp_path):
+    close = Detection("person", 0.9, (500, 0, 800, 720))
+    async with Harness(tmp_path, frames=[textured_frame(size=HD)], labels=[close], texts=[]) as h:
+        assert await h.say("benda apa") == ["Orang di jam 12, sangat dekat."]
 
 
 async def test_dark_or_covered_camera_is_reported(tmp_path):

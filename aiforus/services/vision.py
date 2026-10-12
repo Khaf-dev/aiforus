@@ -164,6 +164,7 @@ class Look:
     status: VisionStatus
     detections: list[Detection] = field(default_factory=list)
     texts: list[TextRegion] = field(default_factory=list)
+    frame_size: tuple[int, int] | None = None  # (width, height)
 
 
 class VisionService:
@@ -218,7 +219,7 @@ class VisionService:
         status, frame = await self.capture()
         if frame is None:
             return Look(status)
-        look = Look(VisionStatus.OK)
+        look = Look(VisionStatus.OK, frame_size=(int(frame.shape[1]), int(frame.shape[0])))
         if objects and self.detector is not None:
             look.detections = await asyncio.to_thread(self.detector.detect, frame)
         if text and self.reader is not None:

@@ -74,6 +74,11 @@ class CameraSettings(_Section):
     dark_threshold: float = Field(25.0, ge=0, le=255)
     # Below this pixel standard deviation the lens is likely covered.
     blank_std_threshold: float = Field(6.0, ge=0)
+    # Horizontal field of view of the camera. Used to turn image positions into
+    # clock directions and box sizes into distances. Typical webcams: 60-78;
+    # wide glasses cameras: ~110-120. If distances are consistently off,
+    # adjust this.
+    horizontal_fov_deg: float = Field(70.0, ge=20.0, le=170.0)
 
 
 class VisionSettings(_Section):
@@ -87,10 +92,19 @@ class VisionSettings(_Section):
 
 class FaceSettings(_Section):
     enabled: bool = True
-    detection_model: Literal["hog", "cnn"] = "hog"
-    # Euclidean distance between 128-d dlib encodings. face_recognition's
-    # default tolerance is 0.6; lower is stricter (fewer false matches).
-    match_threshold: float = Field(0.55, gt=0.0, le=1.0)
+    # opencv: YuNet detector + SFace recogniser (small ONNX models that also run
+    #         on Raspberry Pi, Jetson and phones). Needs only OpenCV.
+    # dlib:   the face_recognition library (needs a C++ build; desktop only).
+    backend: Literal["opencv", "dlib"] = "opencv"
+    # int8 models are ~4x smaller and faster on edge devices, slightly less accurate.
+    quantized: bool = False
+    model_dir: Path = Path("models/opencv")
+    detection_confidence: float = Field(0.8, gt=0.0, lt=1.0)  # opencv only
+    detection_model: Literal["hog", "cnn"] = "hog"  # dlib only
+    # Max Euclidean distance between embeddings to count as the same person.
+    # Empty = the backend's recommended value (SFace 1.128 on unit vectors,
+    # i.e. cosine similarity >= 0.363; dlib 0.55). Lower is stricter.
+    match_threshold: float | None = Field(None, gt=0.0, le=2.0)
     max_samples_per_person: int = Field(10, ge=1, le=100)
 
 
@@ -143,6 +157,11 @@ class Settings(_Section):
     @property
     def database_path(self) -> Path:
         return self.data_dir / "aiforus.db"
+
+    @property
+    def face_model_dir(self) -> Path:
+        path = self.face.model_dir
+        return path if path.is_absolute() else PROJECT_ROOT / path
 
     @property
     def piper_dir(self) -> Path:

@@ -13,7 +13,7 @@ run on the companion device (laptop today, phone or edge board later).
                        ┌────────────────────────────┼──────────────────────────┐
                        ▼                            ▼                          ▼
                  VisionService                FaceService                 Navigator
-                 camera + YOLOv8 + EasyOCR    dlib encodings + SQLite     Nominatim + OSRM
+                 camera + YOLOv8 + EasyOCR    YuNet + SFace + SQLite      Nominatim + OSRM
                  (services/vision.py)         (services/faces.py)         (services/navigation.py)
 ```
 
@@ -38,6 +38,8 @@ run on the companion device (laptop today, phone or edge board later).
 | **One TTS thread owns the pyttsx3 engine** | pyttsx3 isn't thread-safe. Interruption uses the engine's `started-word` callback. |
 | **"I can't see" is different from "I see nothing"** | Dark or covered frames are reported explicitly; "nothing detected" must never be mistaken for "all clear". |
 | **Typed config, secrets only from env** | Typos in `config.yaml` fail at startup; API keys never live in the repo. |
+| **Face recognition with YuNet + SFace (OpenCV DNN)** | ~40 MB of ONNX models (~10 MB int8), no C++ build, runs on Raspberry Pi/Jetson/phones — the same code path as the future edge device. Embeddings are L2-normalised so one Euclidean threshold maps to SFace's cosine threshold. dlib stays available as a desktop-only backend; embeddings of different models are stored separately. |
+| **Clock directions + rough distance** | Orientation & mobility training uses clock directions. Bearing comes from the box centre and the camera FOV; distance from the pinhole model and a typical height per class, always spoken as "about". Boxes cut off by the frame are "very close" without a number. |
 | **Face encodings as raw float64 in SQLite** | `pickle.load` on a replaceable file can execute code. Names are case-insensitive; enrollment refuses frames with several faces. |
 | **Every sentence in `locales.py`** | Indonesian first, English kept in sync; a test enforces identical keys and placeholders. |
 

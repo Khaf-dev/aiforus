@@ -36,7 +36,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--mute", action="store_true", help="print replies instead of speaking them")
     parser.add_argument("--check", action="store_true", help="report which components work, then exit")
     parser.add_argument(
-        "--download-voices", action="store_true", help="download the Piper voice models from config.yaml"
+        "--download-models",
+        "--download-voices",
+        dest="download_models",
+        action="store_true",
+        help="download the Piper voices and face models named in config.yaml",
     )
     parser.add_argument("--debug", action="store_true", help="verbose logging")
     parser.add_argument("--version", action="version", version=f"aiforus {__version__}")
@@ -108,7 +112,7 @@ def build_components(settings: Settings, args: argparse.Namespace, language: str
     from .hal.camera import OpenCVCamera
     from .hal.stt import GoogleSpeechInput, KeyboardInput
     from .hal.tts import PrintTTS
-    from .services.faces import DlibFaceEncoder
+    from .services.faces import DlibFaceEncoder, OpenCVFaceEncoder
     from .services.llm import OpenAIAnswerer
     from .services.navigation import Navigator
     from .services.vision import EasyOcrReader, YoloDetector
@@ -140,8 +144,16 @@ def build_components(settings: Settings, args: argparse.Namespace, language: str
         model = str(PROJECT_ROOT / model)
     c.detector = _try(c, "object detection", lambda: YoloDetector(model, s.vision.detection_confidence))
     c.reader = _try(c, "text reading", lambda: EasyOcrReader(s.vision.ocr_languages, s.vision.ocr_confidence))
-    if s.face.enabled:
-        c.face_encoder = _try(c, "face recognition", lambda: DlibFaceEncoder(s.face.detection_model))
+    if s.face.enabled and s.face.backend == "opencv":
+        c.face_encoder = _try(
+            c,
+            "face recognition (opencv)",
+            lambda: OpenCVFaceEncoder(
+                s.face_model_dir, quantized=s.face.quantized, score_threshold=s.face.detection_confidence
+            ),
+        )
+    elif s.face.enabled:
+        c.face_encoder = _try(c, "face recognition (dlib)", lambda: DlibFaceEncoder(s.face.detection_model))
     else:
         c.status["face recognition"] = "disabled in config"
     if s.navigation.enabled:
@@ -179,14 +191,36 @@ def _close_quietly(*resources: Any) -> None:
                 close()
 
 
-def download_voices(settings: Settings) -> int:
+def download_models(settings: Settings) -> int:
+    from .downloads import download_file
     from .hal.piper_tts import download_voice
+    from .services.faces import opencv_face_model_files
+
+    def report(msg: str) -> None:
+        print(f"  {msg}")
+
+    jobs: list[tuple[str, Any]] = [
+        (
+            f"voice [{lang}] {name}",
+            lambda name=name: download_voice(name, settings.piper_dir, progress=report),
+        )
+        for lang, name in settings.speech.piper_voices.items()
+    ]
+    if settings.face.enabled and settings.face.backend == "opencv":
+        for role, (url, filename) in opencv_face_model_files(settings.face.quantized).items():
+            dest = settings.face_model_dir / filename
+            jobs.append(
+                (
+                    f"face {role} {filename}",
+                    lambda url=url, dest=dest: download_file(url, dest, progress=report),
+                )
+            )
 
     failures = 0
-    for language, name in settings.speech.piper_voices.items():
-        print(f"[{language}] {name}")
+    for title, job in jobs:
+        print(title)
         try:
-            path = download_voice(name, settings.piper_dir, progress=lambda msg: print(f"  {msg}"))
+            path = job()
         except Exception as exc:  # network, HTTP 404, disk
             failures += 1
             print(f"  FAILED: {exc}")
@@ -208,7 +242,7 @@ def run_check(settings: Settings, args: argparse.Namespace) -> int:
     if voice is not None and hasattr(voice, "voice_found"):
         engine = getattr(voice, "engine_name", "tts")
         if engine == "piper":
-            hint = "run: python -m aiforus --download-voices"
+            hint = "run: python -m aiforus --download-models"
         else:
             hint = "install one, or use Piper (see README)"
         for lang in SUPPORTED_LANGUAGES:
@@ -252,8 +286,8 @@ async def run_assistant(settings: Settings, args: argparse.Namespace) -> int:
     if components.face_encoder is not None:
         faces = FaceService(
             components.face_encoder,
-            SqlFaceStore(db),
-            match_threshold=settings.face.match_threshold,
+            SqlFaceStore(db, model=components.face_encoder.model_name),
+            match_threshold=settings.face.match_threshold or components.face_encoder.default_threshold,
             max_samples_per_person=settings.face.max_samples_per_person,
         )
 
@@ -318,8 +352,8 @@ def main(argv: list[str] | None = None) -> int:
         logging.getLogger().setLevel(settings.app.log_level)
         _quiet_third_party_noise()
 
-    if args.download_voices:
-        return download_voices(settings)
+    if args.download_models:
+        return download_models(settings)
     if args.check:
         # The report already lists every problem; skip the duplicate warnings.
         logging.getLogger().setLevel(logging.ERROR)

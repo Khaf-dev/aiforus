@@ -157,7 +157,7 @@ def test_language_switch_and_missing_voice(fakes):
 
 def test_missing_model_for_start_language_is_reported(fakes):
     model_dir, _ = fakes
-    with pytest.raises(ComponentUnavailable, match="download-voices"):
+    with pytest.raises(ComponentUnavailable, match="download-models"):
         make(model_dir, voices={"id": "id_ID-other-medium", "en": "en_US-lessac-medium"})
 
 

@@ -26,6 +26,12 @@ a command.
 Anything else is treated as a general question and answered by the LLM when
 `OPENAI_API_KEY` is set.
 
+Describing the scene answers with **clock directions** (12 = straight ahead,
+3 = right, 9 = left) and a rough distance, nearest first, e.g. *"Kursi di jam
+1, sekitar 2 meter. 2 orang di jam 12, yang terdekat sekitar 3 meter."*
+Distances are estimates from the object's size in the image (often ±30%), so
+they are always said with "sekitar" / "about".
+
 Notes:
 
 - A bare **"tolong"** or **"help"** is treated as an emergency. To hear the

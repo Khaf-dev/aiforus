@@ -23,9 +23,9 @@ Today it runs on a laptop with a webcam and headphones.
 | --- | --- | --- |
 | Voice commands (id / en) | ✅ | Rule-based router, Google speech recognition (online) |
 | Spoken replies | ✅ | Offline neural TTS (Piper) with a natural Indonesian voice, pyttsx3 fallback; prioritised and interruptible |
-| Describe surroundings | ✅ | YOLOv8n object detection, counts per object |
+| Describe surroundings | ✅ | YOLOv8n object detection with clock directions and rough distance ("chair at 1 o'clock, about 2 meters") |
 | Read text | ✅ | EasyOCR (Indonesian + English), reading order |
-| Recognise people | ✅ | Enroll by voice, dlib face encodings, stored locally |
+| Recognise people | ✅ | Enroll by voice; YuNet + SFace (small ONNX models that also run on edge devices), stored locally |
 | Walking directions | ⚠️ demo | Nominatim + OSRM, turn-by-turn; start point from IP (km off) |
 | General questions | ✅ optional | LLM, only if `OPENAI_API_KEY` is set |
 | Emergency | ⚠️ partial | Immediate spoken guidance + location; does **not** send alerts yet |
@@ -45,9 +45,8 @@ python -m pip install -U pip
 # Voice + camera features (downloads PyTorch, a few hundred MB)
 pip install -e ".[voice,piper,vision]"
 # Natural offline voices for Indonesian and English (~60 MB each)
-python -m aiforus --download-voices
-# Optional: face recognition (needs CMake and the Visual Studio C++ build tools for dlib)
-pip install -e ".[faces]"
+# Piper voices (id + en, ~60 MB each) and face models (~40 MB)
+python -m aiforus --download-models
 # Optional: answers to general questions
 pip install -e ".[llm]"
 copy .env.example .env   # then put your OPENAI_API_KEY in .env
@@ -95,7 +94,7 @@ Say **"bantuan"** to hear the commands. Full list:
 ```
 mic/keyboard → SpeechInput → IntentRouter → Assistant → SpeechQueue → TTS → speaker
                                               ├─ VisionService (camera, YOLOv8, EasyOCR)
-                                              ├─ FaceService (dlib, SQLite)
+                                              ├─ FaceService (YuNet + SFace, SQLite)
                                               └─ Navigator (Nominatim, OSRM)
 ```
 
@@ -123,8 +122,10 @@ runs anywhere in a few seconds; CI runs it on Python 3.10–3.13.
 ## Roadmap
 
 - **Fase 0 — Foundation** ✅ safety fixes, new architecture, tests, honest docs.
-- **Fase 1 — Real-time perception:** object positions ("chair at 2 o'clock"),
-  wake word, offline Indonesian speech recognition, better Indonesian voice.
+- **Fase 1 — Real-time perception:** ✅ object positions ("chair at 2 o'clock,
+  about 2 meters"), ✅ natural Indonesian voice (Piper), ✅ edge-ready face
+  recognition; next: rich scene descriptions, offline Indonesian speech
+  recognition, push-to-talk / wake word.
 - **Fase 2 — Hazards:** depth estimation for head-level obstacles, vehicle
   tracking, pedestrian lights, sound events (horns, sirens), real emergency alerts.
 - **Fase 3 — Hardware:** smart-glasses adapter, phone GPS, heading.

@@ -23,7 +23,8 @@ from .intents import Intent, IntentRouter, IntentType
 from .services.faces import EnrollStatus, FaceService, normalize_name
 from .services.llm import Answerer
 from .services.navigation import NavigationError, NavigationSession, Navigator, describe_step
-from .services.vision import VisionService, VisionStatus, summarize
+from .services.spatial import group_placements, place
+from .services.vision import Look, VisionService, VisionStatus, summarize
 from .speech import Priority, SpeechQueue
 from .storage import PreferenceStore
 
@@ -257,6 +258,39 @@ class Assistant:
         groups = summarize(detections, self.settings.vision.max_objects_spoken)
         return self.tr.join([self.tr.count_label(label, count) for label, count in groups])
 
+    def _describe_objects(self, look: Look) -> str:
+        """ "Orang di jam 12, sekitar 3 meter. Kursi di jam 1, sekitar 1,5 meter." """
+        if look.frame_size is None:
+            return self.tr.t("scene_objects", items=self._object_phrase(look.detections))
+        width, height = look.frame_size
+        fov = self.settings.camera.horizontal_fov_deg
+        groups = group_placements([place(d, width, height, fov) for d in look.detections])
+        limit = self.settings.vision.max_objects_spoken
+        sentences = []
+        for group in groups[:limit]:
+            nearest = group.nearest
+            if nearest.near:
+                where = self.tr.t("spatial_near")
+            elif nearest.distance_m is not None and nearest.distance_m < 1.0:
+                where = self.tr.t("spatial_nearest_close" if group.count > 1 else "spatial_close")
+            elif nearest.distance_m is not None:
+                key = "spatial_nearest" if group.count > 1 else "spatial_distance"
+                where = self.tr.t(key, distance=self.tr.approx_distance(nearest.distance_m))
+            else:
+                where = ""
+            what = (
+                self.tr.count_label(group.label, group.count)
+                if group.count > 1
+                else self.tr.label(group.label)
+            )
+            sentences.append(
+                self.tr.capitalize(self.tr.t("spatial_item", what=what, clock=group.clock, where=where))
+            )
+        remaining = sum(g.count for g in groups[limit:])
+        if remaining:
+            sentences.append(self.tr.t("spatial_more", count=remaining))
+        return " ".join(sentences)
+
     async def _look(self, *, objects: bool, text: bool):
         """Acknowledge, capture and analyse; None if a problem was reported."""
         if self.vision is None or not self.vision.can(objects=objects, text=text):
@@ -275,7 +309,7 @@ class Assistant:
         if look is None:
             return
         if look.detections:
-            self.say("scene_objects", items=self._object_phrase(look.detections))
+            self.speech.say(self._describe_objects(look), Priority.HIGH)
         else:
             self.say("scene_nothing")
         if look.texts:
@@ -286,7 +320,7 @@ class Assistant:
         if look is None:
             return
         if look.detections:
-            self.say("scene_objects", items=self._object_phrase(look.detections))
+            self.speech.say(self._describe_objects(look), Priority.HIGH)
         else:
             self.say("scene_nothing")
 

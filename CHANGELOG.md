@@ -6,17 +6,36 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- **Clock directions and rough distances** (Fase 1A): "Kursi di jam 1,
+  sekitar 2 meter. 2 orang di jam 12, yang terdekat sekitar 3 meter."
+  Bearing from the box centre and `camera.horizontal_fov_deg`; distance from
+  the pinhole model and a typical height per object class; boxes cut off by
+  the frame are reported as "sangat dekat" without a number. Nearest first,
+  the rest summarised.
+- **Face recognition with OpenCV YuNet + SFace** (default `face.backend:
+  opencv`): ONNX models (~40 MB, or ~10 MB with `face.quantized: true`) that
+  run on edge devices, no dlib/C++ build needed. dlib remains available as
+  `face.backend: dlib`. Embeddings are stored per model, so switching
+  backends never mixes incompatible vectors.
 - Piper neural TTS (`piper` extra): natural offline Indonesian voice
   (`id_ID-news_tts-medium`) and English voice (`en_US-lessac-medium`),
   streamed per sentence and interruptible within ~50 ms.
-- `python -m aiforus --download-voices` downloads the configured voices into
-  `models/piper/` (atomic, skips files already present).
+- `python -m aiforus --download-models` downloads the Piper voices and face
+  models into `models/` (atomic, skips files already present).
+  `--download-voices` still works as an alias.
 - `speech.engine` setting: `auto` (Piper if available, else pyttsx3),
   `piper` or `pyttsx3`. `--check` shows which engine and voices are in use.
+
+### Changed
+- `face.match_threshold` now defaults to the backend's recommended value
+  (SFace 1.128 ≈ cosine 0.363; dlib 0.55).
+- The `vision` extra pins `opencv-python<5`: the YuNet/SFace models in use
+  are the OpenCV 4.x DNN versions.
 
 ### Fixed
 - Console no longer shows comtypes cache logs and harmless torch warnings
   (still visible with `--debug`).
+- English "1 meters" → "1 meter".
 
 ## [0.2.0] — Fase 0: foundation
 

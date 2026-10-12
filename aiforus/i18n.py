@@ -78,8 +78,27 @@ class Translator:
             text = text.split(".")[0]
         return text.replace(".", ",") if self._language == "id" else text
 
+    def approx_distance(self, meters: float) -> str:
+        """Rounded for speech: "kurang dari 1 meter", "1,5 meter", "4 meter"."""
+        if meters < 1.0:
+            return self.t("distance_under_1m")
+        if meters < 3.0:
+            return self._meters(self.number(round(meters * 2) / 2))
+        if meters < 20.0:
+            return self._meters(int(round(meters)))
+        return self.distance(meters)
+
+    def _meters(self, value: object) -> str:
+        if self._language == "en" and str(value) == "1":
+            return "1 meter"
+        return self.t("unit_meters", value=value)
+
+    @staticmethod
+    def capitalize(text: str) -> str:
+        return text[:1].upper() + text[1:]
+
     def distance(self, meters: float) -> str:
         if meters < 1000:
             rounded = max(10, int(round(meters / 10.0)) * 10) if meters >= 5 else int(round(meters))
-            return self.t("unit_meters", value=rounded)
+            return self._meters(rounded)
         return self.t("unit_kilometers", value=self.number(meters / 1000.0))

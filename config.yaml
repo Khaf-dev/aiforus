@@ -37,6 +37,7 @@ camera:
   flush_frames: 4         # discard buffered frames so captures are fresh
   dark_threshold: 25      # mean brightness below this = "too dark"
   blank_std_threshold: 6  # pixel std below this = "lens covered"
+  horizontal_fov_deg: 70  # camera field of view; drives clock directions and distances
 
 vision:
   detector_model: "yolov8n.pt"
@@ -48,8 +49,15 @@ vision:
 
 face:
   enabled: true
-  detection_model: "hog"  # hog (fast, CPU) | cnn (accurate, needs GPU)
-  match_threshold: 0.55   # lower = stricter matching
+  # opencv: YuNet + SFace, small ONNX models that also run on Raspberry Pi,
+  #         Jetson and phones (download with: python -m aiforus --download-models)
+  # dlib:   face_recognition library (pip install -e .[faces]; desktop only)
+  backend: "opencv"
+  quantized: false        # true = int8 models (~10 MB instead of ~39 MB) for edge devices
+  model_dir: "models/opencv"
+  detection_confidence: 0.8
+  detection_model: "hog"  # dlib only: hog (fast, CPU) | cnn (accurate, needs GPU)
+  # match_threshold: 1.128  # max embedding distance; empty = backend default (lower = stricter)
   max_samples_per_person: 10
 
 navigation:

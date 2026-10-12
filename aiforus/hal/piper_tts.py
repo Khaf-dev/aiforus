@@ -48,31 +48,14 @@ def download_voice(
     timeout_s: float = 60.0,
     progress: Callable[[str], None] | None = None,
 ) -> Path:
-    """Download a voice's ``.onnx`` and ``.onnx.json`` unless already present.
+    """Download a voice's ``.onnx`` and ``.onnx.json`` unless already present."""
+    from ..downloads import download_file
 
-    Files are written to ``*.part`` first and renamed when complete, so an
-    interrupted download never leaves a truncated model behind.
-    """
-    import requests
-
-    session = session or requests.Session()
-    directory.mkdir(parents=True, exist_ok=True)
     model_url, config_url = voice_urls(voice_name)
     model_path = voice_path(directory, voice_name)
-    targets = [(config_url, model_path.with_name(model_path.name + ".json")), (model_url, model_path)]
-    for url, dest in targets:
-        if dest.exists() and dest.stat().st_size > 0:
-            continue
-        if progress is not None:
-            progress(f"downloading {url}")
-        partial = dest.with_name(dest.name + ".part")
-        with session.get(url, stream=True, timeout=timeout_s) as response:
-            response.raise_for_status()
-            with partial.open("wb") as fh:
-                for block in response.iter_content(chunk_size=1 << 16):
-                    if block:
-                        fh.write(block)
-        partial.replace(dest)
+    config_path = model_path.with_name(model_path.name + ".json")
+    download_file(config_url, config_path, session=session, timeout_s=timeout_s, progress=progress)
+    download_file(model_url, model_path, session=session, timeout_s=timeout_s, progress=progress)
     return model_path
 
 
@@ -134,7 +117,7 @@ class PiperTTS:
         if not self.set_language(language):
             raise ComponentUnavailable(
                 f"Piper voice for {language!r} not found in {model_dir}. "
-                "Download it with: python -m aiforus --download-voices"
+                "Download it with: python -m aiforus --download-models"
             )
         self._audio: Any = pyaudio.PyAudio()
         self._stream: Any = None
