@@ -44,8 +44,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "faces_unknown": "{count} orang belum aku kenal.",
         "enroll_need_name": "Sebutkan namanya, misalnya: kenali wajah sebagai Budi.",
         "enroll_look": (
-            "Pastikan {name} setuju wajahnya disimpan. "
-            "Arahkan kamera ke wajah {name}, lalu tahan sebentar."
+            "Pastikan {name} setuju wajahnya disimpan. Arahkan kamera ke wajah {name}, lalu tahan sebentar."
         ),
         "enroll_ok": "Wajah {name} tersimpan. Sekarang ada {count} sampel.",
         "enroll_no_face": "Aku tidak menemukan wajah. Coba lagi dengan cahaya yang cukup.",
@@ -89,8 +88,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "modifier_left": "Belok kiri",
         "modifier_sharp_left": "Belok tajam ke kiri",
         "where_am_i": (
-            "Perkiraan lokasimu: {address}. "
-            "Ini perkiraan dari internet dan bisa meleset beberapa kilometer."
+            "Perkiraan lokasimu: {address}. Ini perkiraan dari internet dan bisa meleset beberapa kilometer."
         ),
         "where_unknown": "Lokasimu tidak bisa ditentukan.",
         # Sound
@@ -104,9 +102,7 @@ MESSAGES: dict[str, dict[str, str]] = {
             "Bahasa itu belum didukung. Pilihannya Bahasa Indonesia atau Bahasa Inggris."
         ),
         # General questions
-        "llm_unavailable": (
-            "Aku belum bisa menjawab pertanyaan umum karena layanan AI belum diatur."
-        ),
+        "llm_unavailable": ("Aku belum bisa menjawab pertanyaan umum karena layanan AI belum diatur."),
         "llm_error": "Maaf, layanan AI sedang tidak bisa dihubungi.",
         # Emergency
         "emergency_start": "Mode darurat.",
@@ -119,9 +115,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         ),
         "emergency_location_unknown": "Lokasimu tidak bisa ditentukan.",
         # Exit / confirmation
-        "exit_confirm": (
-            "Mau mematikan asisten? Katakan 'ya' untuk mematikan, atau 'tidak' untuk batal."
-        ),
+        "exit_confirm": ("Mau mematikan asisten? Katakan 'ya' untuk mematikan, atau 'tidak' untuk batal."),
         "exit_bye": "Asisten dimatikan. Sampai jumpa.",
         "exit_cancelled": "Baik, asisten tetap menyala.",
         "nothing_to_confirm": "Tidak ada yang perlu dikonfirmasi.",
@@ -224,8 +218,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "emergency_no_send": "I can't send emergency messages to anyone yet.",
         "emergency_call": "Call {number} now, or shout for help from people around you.",
         "emergency_location": (
-            "Your estimated location from the internet: {address}. "
-            "It may be off by several kilometers."
+            "Your estimated location from the internet: {address}. It may be off by several kilometers."
         ),
         "emergency_location_unknown": "I can't determine your location.",
         "exit_confirm": "Turn off the assistant? Say 'yes' to turn it off, or 'no' to cancel.",
@@ -239,6 +232,7 @@ MESSAGES: dict[str, dict[str, str]] = {
 }
 
 # Indonesian names for the 80 COCO classes detected by YOLOv8.
+# fmt: off
 COCO_LABELS_ID: dict[str, str] = {
     "person": "orang", "bicycle": "sepeda", "car": "mobil", "motorcycle": "sepeda motor",
     "airplane": "pesawat", "bus": "bus", "train": "kereta", "truck": "truk", "boat": "perahu",
@@ -270,3 +264,4 @@ EN_IRREGULAR_PLURALS: dict[str, str] = {
     "skis": "skis", "scissors": "scissors", "bus": "buses", "couch": "couches",
     "sandwich": "sandwiches", "toothbrush": "toothbrushes", "hair drier": "hair driers",
 }
+# fmt: on

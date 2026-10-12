@@ -120,88 +120,137 @@ _LANG_KNOWN = r"(?P<lang>" + _KNOWN_LANGS + r")"
 _NAME = r"(?P<name>[\w' -]+?)"
 
 _RULES: list[tuple[IntentType, re.Pattern[str]]] = [
-    (IntentType.HELP_MENU, _rx(
-        r"^(?:bantuan|menu|daftar perintah|perintah|help menu|commands|list commands|menu bantuan)$"
-        r"|\b(?:apa (?:saja )?yang bisa kamu (?:lakukan|kerjakan)|kamu bisa apa(?: saja)?"
-        r"|perintah apa saja|what can you do|what can i say|how do i use)\b"
-    )),
+    (
+        IntentType.HELP_MENU,
+        _rx(
+            r"^(?:bantuan|menu|daftar perintah|perintah|help menu|commands|list commands|menu bantuan)$"
+            r"|\b(?:apa (?:saja )?yang bisa kamu (?:lakukan|kerjakan)|kamu bisa apa(?: saja)?"
+            r"|perintah apa saja|what can you do|what can i say|how do i use)\b"
+        ),
+    ),
     # Python's re forbids reusing a group name across alternatives, so rules
     # with several phrasings are listed once per phrasing.
-    (IntentType.CHANGE_LANGUAGE, _rx(
-        r"^(?:ganti|ubah|pakai|gunakan|switch|change|speak|use)\b(?: (?:the|ke|to|in|jadi|menjadi))*"
-        r" (?:bahasa|language)(?: (?:ke|to|jadi|menjadi))? " + _LANG_WORDS + r"$"
-    )),
+    (
+        IntentType.CHANGE_LANGUAGE,
+        _rx(
+            r"^(?:ganti|ubah|pakai|gunakan|switch|change|speak|use)\b(?: (?:the|ke|to|in|jadi|menjadi))*"
+            r" (?:bahasa|language)(?: (?:ke|to|jadi|menjadi))? " + _LANG_WORDS + r"$"
+        ),
+    ),
     (IntentType.CHANGE_LANGUAGE, _rx(r"^(?:switch|change) to " + _LANG_KNOWN + r"$")),
     (IntentType.CHANGE_LANGUAGE, _rx(r"^(?:speak|pakai bahasa|bahasa) " + _LANG_KNOWN + r"$")),
-    (IntentType.ENROLL_FACE, _rx(
-        r"^(?:kenali|ingat|ingatlah|simpan|daftarkan|rekam|catat) wajah(?: (?:saya|aku|ini))?"
-        r"(?: (?:sebagai|milik|bernama|namanya|si))?(?: " + _NAME + r")?$"
-    )),
-    (IntentType.ENROLL_FACE, _rx(
-        r"^(?:enroll|register)(?: (?:my|the|this))?(?: face)?(?: (?:of|as|for))?(?: " + _NAME + r")?$"
-    )),
-    (IntentType.ENROLL_FACE, _rx(
-        r"^(?:remember|save|learn) (?:my |the |this )?face(?: (?:of|as|for))?(?: " + _NAME + r")?$"
-    )),
-    (IntentType.FORGET_FACE, _rx(
-        r"^(?:lupakan|hapus)(?: (?:wajah|data wajah))?(?: (?:si|milik))?(?: " + _NAME + r")?$"
-    )),
-    (IntentType.FORGET_FACE, _rx(
-        r"^(?:forget|delete|remove)(?: (?:the )?face(?: of)?)?(?: " + _NAME + r")?$"
-    )),
-    (IntentType.LIST_FACES, _rx(
-        r"\b(?:siapa saja yang (?:kamu|kau) kenal|(?:kamu|kau) kenal siapa saja|daftar (?:wajah|orang)"
-        r"|who do you know|list (?:people|faces|known people))\b"
-    )),
-    (IntentType.RECOGNIZE_FACES, _rx(
-        r"\b(?:siapa (?:ini|itu|dia|di depan(?: saya| aku| ku)?|yang ada di depan|di sini|di sana)"
-        r"|ada siapa(?: saja)?|kenali (?:orang|wajah)(?: ini| di depan)?$|wajah siapa"
-        r"|who(?: is|'s) (?:this|that|here|there|in front)|recognize (?:faces|people|this person)"
-        r"|identify (?:the |this )?(?:person|people|faces))\b"
-    )),
-    (IntentType.READ_TEXT, _rx(
-        r"\b(?:baca|bacakan|bacain|membaca|apa tulisannya|tulisannya apa|tulisan apa|read|what does (?:it|this|that) say)\b"
-    )),
-    (IntentType.DETECT_OBJECTS, _rx(
-        r"\b(?:benda apa|ada benda|deteksi (?:benda|objek)|objek apa|barang apa"
-        r"|what objects|detect objects|identify objects|what things)\b"
-    )),
-    (IntentType.DESCRIBE_SCENE, _rx(
-        r"\b(?:apa (?:yang )?(?:ada )?di (?:depan|sekitar|sekeliling)|ada apa(?: saja)? di (?:depan|sekitar)"
-        r"|gambarkan|deskripsikan|jelaskan (?:sekitar|keadaan|suasana)|lihat sekitar|apa yang kamu lihat"
-        r"|describe|what do you see|what's (?:around|in front|ahead)|what is (?:around|in front)|look around)\b"
-    )),
-    (IntentType.NEXT_DIRECTION, _rx(
-        r"\b(?:arah (?:selanjutnya|berikutnya)|langkah (?:selanjutnya|berikutnya)|lanjut(?:kan)? (?:arah|rute)"
-        r"|next (?:direction|step)|guide me forward|continue (?:route|directions))\b"
-    )),
-    (IntentType.REPEAT_DIRECTION, _rx(
-        r"\b(?:ulangi (?:arah|petunjuk|langkah)|arah (?:sekarang|saat ini)|repeat (?:the )?(?:direction|step)"
-        r"|current (?:direction|step))\b"
-    )),
-    (IntentType.WHERE_AM_I, _rx(
-        r"\b(?:(?:aku|saya) (?:di|ada di) (?:mana|manakah)|lokasi(?:ku| saya| aku)?(?: sekarang)?(?: di mana)?$"
-        r"|di mana (?:aku|saya)|where am i|my location|current location)\b"
-    )),
-    (IntentType.NAVIGATE, _rx(
-        r"^(?:arahkan|antar|antarkan|navigasi|navigasikan|tunjukkan (?:jalan|arah)|rute|cari rute|pergi"
-        r"|jalan|aku mau|saya mau|aku ingin|saya ingin)(?: (?:aku|saya|kami))?(?: (?:pergi|jalan))?"
-        r" (?:ke|menuju) (?P<dest>.+)$"
-    )),
-    (IntentType.NAVIGATE, _rx(
-        r"^(?:navigate|take me|guide me|directions|route|walk|go|get me|how do i get|how to get)"
-        r"(?: (?:me|us))? (?:to|towards|toward) (?P<dest>.+)$"
-    )),
+    (
+        IntentType.ENROLL_FACE,
+        _rx(
+            r"^(?:kenali|ingat|ingatlah|simpan|daftarkan|rekam|catat) wajah(?: (?:saya|aku|ini))?"
+            r"(?: (?:sebagai|milik|bernama|namanya|si))?(?: " + _NAME + r")?$"
+        ),
+    ),
+    (
+        IntentType.ENROLL_FACE,
+        _rx(r"^(?:enroll|register)(?: (?:my|the|this))?(?: face)?(?: (?:of|as|for))?(?: " + _NAME + r")?$"),
+    ),
+    (
+        IntentType.ENROLL_FACE,
+        _rx(r"^(?:remember|save|learn) (?:my |the |this )?face(?: (?:of|as|for))?(?: " + _NAME + r")?$"),
+    ),
+    (
+        IntentType.FORGET_FACE,
+        _rx(r"^(?:lupakan|hapus)(?: (?:wajah|data wajah))?(?: (?:si|milik))?(?: " + _NAME + r")?$"),
+    ),
+    (
+        IntentType.FORGET_FACE,
+        _rx(r"^(?:forget|delete|remove)(?: (?:the )?face(?: of)?)?(?: " + _NAME + r")?$"),
+    ),
+    (
+        IntentType.LIST_FACES,
+        _rx(
+            r"\b(?:siapa saja yang (?:kamu|kau) kenal|(?:kamu|kau) kenal siapa saja|daftar (?:wajah|orang)"
+            r"|who do you know|list (?:people|faces|known people))\b"
+        ),
+    ),
+    (
+        IntentType.RECOGNIZE_FACES,
+        _rx(
+            r"\b(?:siapa (?:ini|itu|dia|di depan(?: saya| aku| ku)?|yang ada di depan|di sini|di sana)"
+            r"|ada siapa(?: saja)?|kenali (?:orang|wajah)(?: ini| di depan)?$|wajah siapa"
+            r"|who(?: is|'s) (?:this|that|here|there|in front)|recognize (?:faces|people|this person)"
+            r"|identify (?:the |this )?(?:person|people|faces))\b"
+        ),
+    ),
+    (
+        IntentType.READ_TEXT,
+        _rx(
+            r"\b(?:baca|bacakan|bacain|membaca|apa tulisannya|tulisannya apa|tulisan apa|read|what does (?:it|this|that) say)\b"
+        ),
+    ),
+    (
+        IntentType.DETECT_OBJECTS,
+        _rx(
+            r"\b(?:benda apa|ada benda|deteksi (?:benda|objek)|objek apa|barang apa"
+            r"|what objects|detect objects|identify objects|what things)\b"
+        ),
+    ),
+    (
+        IntentType.DESCRIBE_SCENE,
+        _rx(
+            r"\b(?:apa (?:yang )?(?:ada )?di (?:depan|sekitar|sekeliling)|ada apa(?: saja)? di (?:depan|sekitar)"
+            r"|gambarkan|deskripsikan|jelaskan (?:sekitar|keadaan|suasana)|lihat sekitar|apa yang kamu lihat"
+            r"|describe|what do you see|what's (?:around|in front|ahead)|what is (?:around|in front)|look around)\b"
+        ),
+    ),
+    (
+        IntentType.NEXT_DIRECTION,
+        _rx(
+            r"\b(?:arah (?:selanjutnya|berikutnya)|langkah (?:selanjutnya|berikutnya)|lanjut(?:kan)? (?:arah|rute)"
+            r"|next (?:direction|step)|guide me forward|continue (?:route|directions))\b"
+        ),
+    ),
+    (
+        IntentType.REPEAT_DIRECTION,
+        _rx(
+            r"\b(?:ulangi (?:arah|petunjuk|langkah)|arah (?:sekarang|saat ini)|repeat (?:the )?(?:direction|step)"
+            r"|current (?:direction|step))\b"
+        ),
+    ),
+    (
+        IntentType.WHERE_AM_I,
+        _rx(
+            r"\b(?:(?:aku|saya) (?:di|ada di) (?:mana|manakah)|lokasi(?:ku| saya| aku)?(?: sekarang)?(?: di mana)?$"
+            r"|di mana (?:aku|saya)|where am i|my location|current location)\b"
+        ),
+    ),
+    (
+        IntentType.NAVIGATE,
+        _rx(
+            r"^(?:arahkan|antar|antarkan|navigasi|navigasikan|tunjukkan (?:jalan|arah)|rute|cari rute|pergi"
+            r"|jalan|aku mau|saya mau|aku ingin|saya ingin)(?: (?:aku|saya|kami))?(?: (?:pergi|jalan))?"
+            r" (?:ke|menuju) (?P<dest>.+)$"
+        ),
+    ),
+    (
+        IntentType.NAVIGATE,
+        _rx(
+            r"^(?:navigate|take me|guide me|directions|route|walk|go|get me|how do i get|how to get)"
+            r"(?: (?:me|us))? (?:to|towards|toward) (?P<dest>.+)$"
+        ),
+    ),
     (IntentType.NAVIGATE, _rx(r"^(?:navigasi|arahkan|navigate|directions|rute)$")),
-    (IntentType.SOUND, _rx(
-        r"\b(?:apa yang kamu dengar|suara apa|dengarkan(?: sekitar)?|ada rintangan|cek (?:jalan|depan)"
-        r"|what do you hear|what sound|detect sounds|listen around|check ahead|any obstacles?|obstacles?)\b"
-    )),
+    (
+        IntentType.SOUND,
+        _rx(
+            r"\b(?:apa yang kamu dengar|suara apa|dengarkan(?: sekitar)?|ada rintangan|cek (?:jalan|depan)"
+            r"|what do you hear|what sound|detect sounds|listen around|check ahead|any obstacles?|obstacles?)\b"
+        ),
+    ),
 ]
 
 _LANGUAGE_CODES = {
-    "indonesia": "id", "indonesian": "id", "bahasa indonesia": "id",
-    "inggris": "en", "english": "en",
+    "indonesia": "id",
+    "indonesian": "id",
+    "bahasa indonesia": "id",
+    "inggris": "en",
+    "english": "en",
 }
 
 

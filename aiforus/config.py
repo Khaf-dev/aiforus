@@ -52,9 +52,7 @@ class SpeechSettings(_Section):
             "en": ["english", "en-us", "en_us", "en-gb", "zira", "david"],
         }
     )
-    recognition_locale: dict[str, str] = Field(
-        default_factory=lambda: {"id": "id-ID", "en": "en-US"}
-    )
+    recognition_locale: dict[str, str] = Field(default_factory=lambda: {"id": "id-ID", "en": "en-US"})
 
 
 class CameraSettings(_Section):
