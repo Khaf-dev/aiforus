@@ -59,6 +59,8 @@ class Components:
     navigator: Any = None
     location: Any = None
     answerer: Any = None
+    vlm: Any = None
+    vlm_remote: bool = False
     status: dict[str, str] = field(default_factory=dict)
 
 
@@ -168,10 +170,29 @@ def build_components(settings: Settings, args: argparse.Namespace, language: str
     else:
         c.status["navigation"] = "disabled in config"
     c.answerer = _build_answerer(c, s)
+    c.vlm, c.vlm_remote = _build_vlm(c, s, c.answerer)
     return c
 
 
 _LLM = "general questions (LLM)"
+_VLM = "detailed vision (VLM)"
+
+
+def _build_vlm(c: Components, s: Settings, answerer: Any) -> tuple[Any, bool]:
+    """The same client answers questions about camera images, but images only
+    leave the machine when the user explicitly allows it."""
+    from .services.llm import is_local_endpoint
+
+    remote = not is_local_endpoint(s.llm.base_url)
+    if answerer is None:
+        c.status[_VLM] = "off - needs the LLM settings above"
+        return None, remote
+    if remote and not s.llm.allow_images_to_cloud:
+        c.status[_VLM] = "blocked - images would leave this machine (set llm.allow_images_to_cloud)"
+        return None, remote
+    where = "cloud, announced every time" if remote else "local, images stay on this machine"
+    c.status[_VLM] = f"ok - {s.llm.vision_model or s.llm.model} ({where})"
+    return answerer, remote
 
 
 def _build_answerer(c: Components, s: Settings) -> Any:
@@ -194,6 +215,8 @@ def _build_answerer(c: Components, s: Settings) -> Any:
             model=s.llm.model,
             timeout_s=s.llm.timeout_s,
             max_tokens=s.llm.max_tokens,
+            vision_model=s.llm.vision_model,
+            vision_max_tokens=s.llm.vision_max_tokens,
         ),
     )
     if answerer is not None:
@@ -213,8 +236,11 @@ def _probe_llm(s: Settings) -> str | None:
         models = [m.get("id") for m in response.json().get("data", [])]
     except Exception as exc:
         return f"NOT reachable ({type(exc).__name__}) - is the server running?"
-    if s.llm.model not in models:
-        return f"reachable, but model {s.llm.model!r} not found (have: {', '.join(models) or 'none'})"
+    wanted = list(dict.fromkeys([s.llm.model, s.llm.vision_model or s.llm.model]))
+    missing = [m for m in wanted if m not in models]
+    if missing:
+        names = ", ".join(repr(m) for m in missing)
+        return f"reachable, but model {names} not found (have: {', '.join(models) or 'none'})"
     return "reachable, model found"
 
 
@@ -346,6 +372,8 @@ async def run_assistant(settings: Settings, args: argparse.Namespace) -> int:
         navigator=components.navigator,
         location=components.location,
         answerer=components.answerer,
+        vlm=components.vlm,
+        vlm_is_remote=components.vlm_remote,
         prefs=prefs,
         on_language_change=on_language_change,
     )

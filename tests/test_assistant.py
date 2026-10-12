@@ -19,7 +19,7 @@ from tests.fakes import FakeCamera, FakeTTS, flat_frame, textured_frame, wait_un
 from tests.test_navigation import OSRM_SAMPLE
 
 # "One moment" acknowledgements may or may not be spoken depending on timing.
-ACKS = {MESSAGES[lang][key] for lang in MESSAGES for key in ("looking", "nav_searching")}
+ACKS = {MESSAGES[lang][key] for lang in MESSAGES for key in ("looking", "nav_searching", "vlm_looking")}
 JAKARTA = Location(-6.18, 106.82, "Jakarta, ID", 5000, "ip")
 
 
@@ -107,6 +107,20 @@ class StubAnswerer:
         return self.answer_text
 
 
+class StubVLM:
+    def __init__(self, reply="Ruang kerja dengan meja dan laptop di jam 12.", error=None, delay=0.0):
+        self.reply, self.error, self.delay = reply, error, delay
+        self.calls = []
+
+    async def look(self, image_jpeg, task, language, question=None):
+        self.calls.append((image_jpeg, task, language, question))
+        if self.delay:
+            await asyncio.sleep(self.delay)
+        if self.error:
+            raise self.error
+        return self.reply
+
+
 class Harness:
     def __init__(
         self,
@@ -123,6 +137,8 @@ class Harness:
         navigator=None,
         answerer=None,
         language="id",
+        vlm=None,
+        vlm_is_remote=False,
     ):
         self.tts = FakeTTS()
         self.speech = SpeechQueue(self.tts)
@@ -151,6 +167,8 @@ class Harness:
             navigator=navigator,
             location=location,
             answerer=answerer,
+            vlm=vlm,
+            vlm_is_remote=vlm_is_remote,
             prefs=self.prefs,
             on_language_change=self.language_changes.append,
         )
@@ -547,3 +565,66 @@ async def test_run_in_daemon_thread_returns_and_raises():
 
     with pytest.raises(ValueError):
         await run_in_daemon_thread(boom)
+
+
+# -- vision-language model ------------------------------------------------------
+
+
+@pytest.fixture
+def fake_jpeg(monkeypatch):
+    sizes = []
+
+    def encode(frame, max_side):
+        sizes.append(max_side)
+        return b"jpeg"
+
+    monkeypatch.setattr("aiforus.assistant.encode_jpeg", encode)
+    return sizes
+
+
+async def test_describe_in_detail_uses_vlm(tmp_path, fake_jpeg):
+    from aiforus.services.llm import VisionTask
+
+    vlm = StubVLM()
+    async with Harness(tmp_path, vlm=vlm) as h:
+        assert await h.say("jelaskan lebih detail") == ["Ruang kerja dengan meja dan laptop di jam 12."]
+    assert vlm.calls == [(b"jpeg", VisionTask.DESCRIBE, "id", None)]
+    assert fake_jpeg == [1024]
+
+
+async def test_read_document_and_visual_question(tmp_path, fake_jpeg):
+    from aiforus.services.llm import VisionTask
+
+    vlm = StubVLM(reply="Lima puluh ribu rupiah.")
+    async with Harness(tmp_path, vlm=vlm) as h:
+        await h.say("bacakan menu ini")
+        assert await h.say("lihat, ini uang berapa?") == ["Lima puluh ribu rupiah."]
+    assert [c[1] for c in vlm.calls] == [VisionTask.READ_DOCUMENT, VisionTask.QUESTION]
+    assert vlm.calls[1][3] == "ini uang berapa"
+
+
+async def test_cloud_vlm_is_announced_every_time(tmp_path, fake_jpeg):
+    async with Harness(tmp_path, vlm=StubVLM(reply="Ok."), vlm_is_remote=True) as h:
+        assert await h.say("jelaskan lebih detail") == ["Fotonya aku kirim ke layanan AI di internet.", "Ok."]
+
+
+async def test_vlm_unavailable_error_and_camera_problems(tmp_path, fake_jpeg):
+    async with Harness(tmp_path) as h:
+        assert await h.say("jelaskan lebih detail") == [
+            "Penjelasan detail belum tersedia. Model penglihatan belum diatur."
+        ]
+    async with Harness(tmp_path, vlm=StubVLM(error=ConnectionError("down"))) as h:
+        assert await h.say("baca dokumen") == [
+            "Maaf, model penglihatan tidak bisa dihubungi atau terlalu lama menjawab."
+        ]
+    async with Harness(tmp_path, vlm=StubVLM(delay=1.0)) as h:
+        h.settings.llm.vision_timeout_s = 0.05
+        assert await h.say("jelaskan lebih detail") == [
+            "Maaf, model penglihatan tidak bisa dihubungi atau terlalu lama menjawab."
+        ]
+    async with Harness(tmp_path, frames=[flat_frame(3)], vlm=StubVLM()) as h:
+        assert await h.say("jelaskan lebih detail") == [
+            "Gambar terlalu gelap. Aku tidak bisa melihat dengan jelas."
+        ]
+    async with Harness(tmp_path, vlm=StubVLM(reply="")) as h:
+        assert await h.say("jelaskan lebih detail") == ["Aku tidak bisa menjelaskan gambar ini."]

@@ -21,7 +21,8 @@ from .hal.stt import SpeechInput, SpeechServiceError
 from .i18n import Translator
 from .intents import Intent, IntentRouter, IntentType
 from .services.faces import EnrollStatus, FaceService, normalize_name
-from .services.llm import Answerer
+from .services.imaging import encode_jpeg
+from .services.llm import Answerer, VisionAnswerer, VisionTask
 from .services.navigation import NavigationError, NavigationSession, Navigator, describe_step
 from .services.spatial import group_placements, place, with_face_distances
 from .services.vision import Look, VisionService, VisionStatus, summarize
@@ -88,6 +89,8 @@ class Assistant:
         navigator: Navigator | None = None,
         location: LocationProvider | None = None,
         answerer: Answerer | None = None,
+        vlm: VisionAnswerer | None = None,
+        vlm_is_remote: bool = False,
         prefs: PreferenceStore | None = None,
         on_language_change: Callable[[str], object] | None = None,
     ) -> None:
@@ -100,6 +103,9 @@ class Assistant:
         self.navigator = navigator
         self.location = location
         self.answerer = answerer
+        self.vlm = vlm
+        # Remote = images leave the machine; the user is told every time.
+        self.vlm_is_remote = vlm_is_remote
         self.prefs = prefs
         self._on_language_change = on_language_change
 
@@ -118,6 +124,9 @@ class Assistant:
             IntentType.DESCRIBE_SCENE: self._describe_scene,
             IntentType.DETECT_OBJECTS: self._detect_objects,
             IntentType.READ_TEXT: self._read_text,
+            IntentType.DESCRIBE_DETAIL: self._describe_detail,
+            IntentType.READ_DOCUMENT: self._read_document,
+            IntentType.VISUAL_QUESTION: self._visual_question,
             IntentType.RECOGNIZE_FACES: self._recognize_faces,
             IntentType.ENROLL_FACE: self._enroll_face,
             IntentType.FORGET_FACE: self._forget_face,
@@ -524,6 +533,48 @@ class Assistant:
             self.say("where_am_i", address=location.label)
 
     # -- other -------------------------------------------------------------
+
+    # -- vision-language model ----------------------------------------------
+
+    async def _describe_detail(self, intent: Intent) -> None:
+        await self._ask_vlm(VisionTask.DESCRIBE)
+
+    async def _read_document(self, intent: Intent) -> None:
+        await self._ask_vlm(VisionTask.READ_DOCUMENT)
+
+    async def _visual_question(self, intent: Intent) -> None:
+        await self._ask_vlm(VisionTask.QUESTION, intent.slots.get("question"))
+
+    async def _ask_vlm(self, task: VisionTask, question: str | None = None) -> None:
+        if self.vlm is None:
+            self.say("vlm_unavailable")
+            return
+        if self.vision is None or not self.vision.can():
+            self.say("vision_unavailable")
+            return
+        ack = self.say("vlm_looking", Priority.LOW)
+        status, frame = await self.vision.capture()
+        if frame is None:
+            self.speech.discard(ack)
+            self._vision_problem(status)
+            return
+        if self.vlm_is_remote:
+            self.say("vlm_cloud_notice", Priority.NORMAL)
+        try:
+            image = await asyncio.to_thread(encode_jpeg, frame, self.settings.llm.image_max_side)
+            answer = await asyncio.wait_for(
+                self.vlm.look(image, task, self.tr.language, question), self.settings.llm.vision_timeout_s
+            )
+        except Exception:
+            logger.exception("Vision model request failed")
+            self.speech.discard(ack)
+            self.say("vlm_error")
+            return
+        self.speech.discard(ack)
+        if answer:
+            self.speech.say(answer, Priority.HIGH)
+        else:
+            self.say("vlm_empty")
 
     async def _sound(self, intent: Intent) -> None:
         self.say("sound_unavailable")

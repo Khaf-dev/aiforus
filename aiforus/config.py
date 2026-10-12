@@ -139,6 +139,15 @@ class LLMSettings(_Section):
     # Local models on a CPU can take a while to answer.
     timeout_s: float = Field(30.0, gt=0)
     max_tokens: int = Field(200, ge=16)
+    # Vision-language model for detailed descriptions, documents and
+    # questions about the camera image. Empty = same as `model`.
+    vision_model: str | None = None
+    vision_timeout_s: float = Field(60.0, gt=0)
+    vision_max_tokens: int = Field(400, ge=16)
+    image_max_side: int = Field(1024, ge=256, le=4096)
+    # Camera images never leave the machine unless this is true. Local
+    # endpoints (localhost / private network) are always allowed.
+    allow_images_to_cloud: bool = False
 
 
 class EmergencySettings(_Section):

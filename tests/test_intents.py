@@ -62,6 +62,20 @@ T = IntentType
         # Sound features are routed so the assistant can say they're unavailable.
         ("apa yang kamu dengar", T.SOUND),
         ("check ahead", T.SOUND),
+        # Vision-language model commands
+        ("jelaskan lebih detail", T.DESCRIBE_DETAIL),
+        ("tolong gambarkan sekitar dengan lengkap", T.DESCRIBE_DETAIL),
+        ("describe it in detail", T.DESCRIBE_DETAIL),
+        ("baca dokumen ini", T.READ_DOCUMENT),
+        ("bacakan menu", T.READ_DOCUMENT),
+        ("read this letter", T.READ_DOCUMENT),
+        ("lihat, ini uang berapa?", T.VISUAL_QUESTION),
+        ("look, what color is this shirt", T.VISUAL_QUESTION),
+        # ...without stealing the quick commands or the honest obstacle answer
+        ("lihat sekitar", T.DESCRIBE_SCENE),
+        ("gambarkan", T.DESCRIBE_SCENE),
+        ("baca tulisan", T.READ_TEXT),
+        ("lihat ada rintangan", T.SOUND),
         ("", T.EMPTY),
         ("   ", T.EMPTY),
     ],
@@ -157,3 +171,9 @@ def test_unknown_goes_to_general_question_with_original_text():
 def test_normalize():
     assert normalize("  Who’s THERE?! ") == "who's there"
     assert normalize("layang-layang") == "layang-layang"
+
+
+def test_visual_question_slot():
+    intent = router.parse("Coba lihat, baju ini warna apa?")
+    assert intent.type is T.VISUAL_QUESTION
+    assert intent.slots["question"] == "baju ini warna apa"

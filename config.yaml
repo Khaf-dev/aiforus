@@ -73,14 +73,20 @@ navigation:
   walking_speed_mps: 1.2
 
 llm:
-  enabled: true           # used only for general questions, never for commands
+  enabled: true           # general questions and detailed vision; never used for commands
   # Any OpenAI-compatible endpoint. Empty = OpenAI (needs LLM_API_KEY / OPENAI_API_KEY).
-  # Free, local and offline with Ollama: base_url "http://localhost:11434/v1" and
-  # model = a model you pulled with `ollama pull <name>`.
-  base_url:
-  model: "gpt-4o-mini"
+  # Default: local Ollama (free, offline). Pull the model first: ollama pull gemma3:4b
+  base_url: "http://localhost:11434/v1"
+  model: "gemma3:4b"      # multilingual (incl. Indonesian) and can see images
   timeout_s: 30           # local models on a CPU can be slow
   max_tokens: 200
+  # Detailed descriptions, documents and "lihat, ..." questions.
+  vision_model:           # empty = same as model
+  vision_timeout_s: 60
+  vision_max_tokens: 400
+  image_max_side: 1024    # photos are downscaled before sending (faster)
+  # Camera images never leave this machine unless this is true.
+  allow_images_to_cloud: false
 
 emergency:
   contacts: []            # sending alerts is not implemented yet

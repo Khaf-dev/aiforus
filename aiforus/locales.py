@@ -16,6 +16,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "help_menu": (
             "Ini yang bisa aku lakukan. "
             "Melihat: katakan 'apa di depan', 'benda apa saja', atau 'baca tulisan'. "
+            "Untuk lebih rinci: 'jelaskan lebih detail', 'baca dokumen', atau 'lihat' "
+            "lalu pertanyaanmu, misalnya 'lihat, ini uang berapa'. "
             "Wajah: 'siapa ini', 'kenali wajah sebagai Budi', 'siapa saja yang kamu kenal', "
             "atau 'lupakan Budi'. "
             "Arah: 'arahkan ke' lalu nama tempat, 'arah berikutnya', 'ulangi arah', "
@@ -25,6 +27,11 @@ MESSAGES: dict[str, dict[str, str]] = {
             "dan 'matikan asisten' untuk keluar."
         ),
         "looking": "Sebentar, aku lihat dulu.",
+        "vlm_looking": "Sebentar, aku perhatikan dulu.",
+        "vlm_unavailable": "Penjelasan detail belum tersedia. Model penglihatan belum diatur.",
+        "vlm_error": "Maaf, model penglihatan tidak bisa dihubungi atau terlalu lama menjawab.",
+        "vlm_cloud_notice": "Fotonya aku kirim ke layanan AI di internet.",
+        "vlm_empty": "Aku tidak bisa menjelaskan gambar ini.",
         "stt_offline": "Pengenalan suara tidak bisa terhubung ke internet. Periksa koneksi.",
         # Camera / vision
         "vision_unavailable": "Fitur penglihatan belum terpasang di perangkat ini.",
@@ -140,6 +147,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "help_menu": (
             "Here is what I can do. "
             "Seeing: say 'what's in front', 'what objects', or 'read text'. "
+            "For more detail: 'describe in detail', 'read the document', or 'look' followed "
+            "by your question, for example 'look, what color is this shirt'. "
             "Faces: 'who is this', 'enroll face as Budi', 'who do you know', or 'forget Budi'. "
             "Directions: 'take me to' and a place, 'next direction', 'repeat direction', "
             "or 'where am I'. "
@@ -148,6 +157,11 @@ MESSAGES: dict[str, dict[str, str]] = {
             "and 'turn off assistant' to exit."
         ),
         "looking": "One moment, let me look.",
+        "vlm_looking": "One moment, let me take a closer look.",
+        "vlm_unavailable": "Detailed descriptions aren't available. No vision model is set up.",
+        "vlm_error": "Sorry, the vision model can't be reached or took too long.",
+        "vlm_cloud_notice": "I'm sending the photo to an AI service on the internet.",
+        "vlm_empty": "I can't describe this image.",
         "stt_offline": "Speech recognition can't reach the internet. Please check the connection.",
         "vision_unavailable": "Vision features are not installed on this device.",
         "camera_unavailable": "The camera is not available. I can't see right now.",

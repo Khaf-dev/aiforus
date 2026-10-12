@@ -115,3 +115,72 @@ def test_probe_llm(monkeypatch):
     monkeypatch.setattr(requests, "get", down)
     assert cli._probe_llm(s).startswith("NOT reachable")
     assert cli._probe_llm(_settings()) is None  # hosted default: not probed
+
+
+@pytest.mark.parametrize(
+    "url, local",
+    [
+        (None, False),
+        ("http://localhost:11434/v1", True),
+        ("http://127.0.0.1:8080/v1", True),
+        ("http://192.168.1.20:11434/v1", True),
+        ("http://my-pc.local:11434/v1", True),
+        ("https://api.groq.com/openai/v1", False),
+        ("https://8.8.8.8/v1", False),
+    ],
+)
+def test_is_local_endpoint(url, local):
+    from aiforus.services.llm import is_local_endpoint
+
+    assert is_local_endpoint(url) is local
+
+
+async def test_look_sends_image_as_data_url(fake_openai):
+    from aiforus.services.llm import VisionTask
+
+    answerer = OpenAIAnswerer(
+        api_key="x",
+        base_url="http://localhost:11434/v1",
+        model="gemma3:4b",
+        timeout_s=30,
+        max_tokens=50,
+        vision_model="qwen3-vl:4b",
+        vision_max_tokens=321,
+    )
+    reply = await answerer.look(b"\xff\xd8jpeg", VisionTask.QUESTION, "id", "ini uang berapa")
+    assert reply == "Jakarta."
+    request = fake_openai.instances[0].requests[0]
+    assert request["model"] == "qwen3-vl:4b" and request["max_tokens"] == 321
+    system, user = request["messages"]
+    assert "Bahasa Indonesia" in system["content"] and "safe" in system["content"]
+    text, image = user["content"]
+    assert "ini uang berapa" in text["text"]
+    assert image["image_url"]["url"] == "data:image/jpeg;base64,/9hqcGVn"
+
+
+def test_vision_model_defaults_to_chat_model(fake_openai):
+    answerer = OpenAIAnswerer(api_key="x", model="gemma3:4b", timeout_s=30, max_tokens=50)
+    assert answerer._vision_model == "gemma3:4b"
+
+
+def test_build_vlm_privacy(fake_openai):
+    local = _settings(base_url="http://localhost:11434/v1", model="gemma3:4b")
+    c = cli.Components()
+    vlm, remote = cli._build_vlm(c, local, object())
+    assert vlm is not None and remote is False
+    assert "images stay on this machine" in c.status[cli._VLM]
+
+    cloud = _settings(base_url="https://api.example.com/v1", model="m")
+    c = cli.Components()
+    vlm, remote = cli._build_vlm(c, cloud, object())
+    assert vlm is None and remote is True
+    assert c.status[cli._VLM].startswith("blocked")
+
+    allowed = _settings(base_url="https://api.example.com/v1", model="m", allow_images_to_cloud=True)
+    c = cli.Components()
+    vlm, remote = cli._build_vlm(c, allowed, object())
+    assert vlm is not None and remote is True
+    assert "announced" in c.status[cli._VLM]
+
+    c = cli.Components()
+    assert cli._build_vlm(c, local, None) == (None, False)

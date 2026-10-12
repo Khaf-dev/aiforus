@@ -13,6 +13,9 @@ a command.
 | Describe the scene | "apa di depan", "ada apa di sekitar", "gambarkan" | "what's in front of me", "describe" |
 | Objects only | "benda apa saja", "deteksi benda" | "what objects", "detect objects" |
 | Read text | "baca tulisan", "bacakan", "apa tulisannya" | "read text", "what does it say" |
+| Detailed description (VLM) | "jelaskan lebih detail", "gambarkan secara detail" | "describe it in detail" |
+| Read a document (VLM) | "baca dokumen", "bacakan surat ini", "bacakan menu" | "read this letter", "read the menu" |
+| Ask about the image (VLM) | "lihat, ini uang berapa?", "lihat, baju ini warna apa?" | "look, what color is this shirt?" |
 | Who is here | "siapa ini", "ada siapa" | "who is this", "who's there" |
 | Save a face | "kenali wajah sebagai Budi" | "enroll face as Budi", "register face as Budi" |
 | Known people | "siapa saja yang kamu kenal" | "who do you know" |

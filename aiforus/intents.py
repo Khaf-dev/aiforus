@@ -41,6 +41,9 @@ class IntentType(str, Enum):
     READ_TEXT = "read_text"
     DETECT_OBJECTS = "detect_objects"
     DESCRIBE_SCENE = "describe_scene"
+    DESCRIBE_DETAIL = "describe_detail"
+    READ_DOCUMENT = "read_document"
+    VISUAL_QUESTION = "visual_question"
     NEXT_DIRECTION = "next_direction"
     REPEAT_DIRECTION = "repeat_direction"
     NAVIGATE = "navigate"
@@ -178,6 +181,22 @@ _RULES: list[tuple[IntentType, re.Pattern[str]]] = [
             r"|identify (?:the |this )?(?:person|people|faces))\b"
         ),
     ),
+    # Vision-language model commands come before the quick YOLO/OCR ones
+    # because they are more specific ("gambarkan *detail*", "baca *dokumen*").
+    (
+        IntentType.DESCRIBE_DETAIL,
+        _rx(
+            r"\b(?:jelaskan|gambarkan|deskripsikan|ceritakan|lihat)\b.*\b(?:detail|lebih detail|lengkap|rinci|secara rinci)\b"
+            r"|\b(?:describe|tell me about)\b.*\b(?:in detail|in more detail|detailed)\b|\bmore detail\b"
+        ),
+    ),
+    (
+        IntentType.READ_DOCUMENT,
+        _rx(
+            r"\b(?:baca|bacakan|bacain|membaca)\b.*\b(?:dokumen|surat|menu|kertas|halaman|label|resep|struk|kemasan|buku|brosur)\b"
+            r"|\bread\b.*\b(?:document|letter|menu|page|label|receipt|prescription|package|book)\b"
+        ),
+    ),
     (
         IntentType.READ_TEXT,
         _rx(
@@ -243,6 +262,10 @@ _RULES: list[tuple[IntentType, re.Pattern[str]]] = [
             r"|what do you hear|what sound|detect sounds|listen around|check ahead|any obstacles?|obstacles?)\b"
         ),
     ),
+    # "lihat, ini uang berapa?" — a question about what the camera sees.
+    # Last, so obstacle questions above get the honest "not available" answer
+    # instead of a vision model's guess.
+    (IntentType.VISUAL_QUESTION, _rx(r"^(?:lihat|look|lihatlah|tolong lihat)\s+(?P<question>.+)$")),
 ]
 
 _LANGUAGE_CODES = {
@@ -291,6 +314,8 @@ class IntentRouter:
         if intent_type is IntentType.NAVIGATE:
             dest = groups.get("dest")
             return {"destination": dest} if dest else {}
+        if intent_type is IntentType.VISUAL_QUESTION:
+            return {"question": groups.get("question", "")}
         if intent_type in (IntentType.ENROLL_FACE, IntentType.FORGET_FACE):
             name = groups.get("name")
             return {"name": name} if name else {}

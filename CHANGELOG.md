@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- **Detailed vision with a vision-language model** (Fase 1B): "jelaskan
+  lebih detail", "baca dokumen / surat / menu", and "lihat, <pertanyaan>"
+  ("lihat, ini uang berapa?"). Uses the LLM endpoint (`llm.vision_model`,
+  default = `llm.model`); the default config points at local Ollama with
+  `gemma3:4b`. Photos are downscaled (`llm.image_max_side`) and JPEG-encoded.
+  Images never go to a cloud endpoint unless `llm.allow_images_to_cloud` is
+  true, and then every request is announced. The prompt forbids claiming a
+  path is clear or anything is safe; obstacle questions keep the honest
+  "not available" answer.
 - **Clock directions and rough distances** (Fase 1A): "Kursi di jam 1,
   sekitar 2 meter. 2 orang di jam 12, yang terdekat sekitar 3 meter."
   Bearing from the box centre and `camera.horizontal_fov_deg`; distance from

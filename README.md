@@ -24,6 +24,7 @@ Today it runs on a laptop with a webcam and headphones.
 | Voice commands (id / en) | ✅ | Rule-based router, Google speech recognition (online) |
 | Spoken replies | ✅ | Offline neural TTS (Piper) with a natural Indonesian voice, pyttsx3 fallback; prioritised and interruptible |
 | Describe surroundings | ✅ | YOLOv8n object detection with clock directions and rough distance ("chair at 1 o'clock, about 2 meters") |
+| Detailed description, documents, questions about the image | ✅ optional | Vision-language model, local by default (Ollama `gemma3:4b`): "jelaskan lebih detail", "baca dokumen", "lihat, ini uang berapa?" |
 | Read text | ✅ | EasyOCR (Indonesian + English), reading order |
 | Recognise people | ✅ | Enroll by voice; YuNet + SFace (small ONNX models that also run on edge devices), stored locally |
 | Walking directions | ⚠️ demo | Nominatim + OSRM, turn-by-turn; start point from IP (km off) |
@@ -83,7 +84,7 @@ Say **"bantuan"** to hear the commands. Full list:
 | Data | Where it goes |
 | --- | --- |
 | Your voice | Sent to Google's speech recognition service (needs internet). Offline recognition is planned. |
-| Camera images | Processed locally; never stored or uploaded. |
+| Camera images | Processed on this machine. For detailed descriptions they go to the configured vision model — local by default; a cloud provider only if you set `llm.allow_images_to_cloud`, and then the assistant says so every time. Never stored. |
 | Face encodings | Stored locally in `data/aiforus.db`. Not encrypted yet — keep that folder private. Ask people before enrolling their face. |
 | General questions | Stay on your machine with a local LLM (Ollama); sent to the provider only if you configure a hosted one. |
 | Location | Your IP is sent to ipinfo.io; destination searches go to OpenStreetMap Nominatim and OSRM. |
@@ -107,7 +108,7 @@ Non-secret settings live in [`config.yaml`](config.yaml) (camera index, TTS
 speed, confidence thresholds, ...). Unknown keys are rejected at startup.
 Secrets (`LLM_API_KEY`) come from the environment or `.env`.
 
-### General questions (LLM)
+### General questions and detailed vision (LLM)
 
 Anything that isn't a command is answered by an LLM through the
 OpenAI-compatible API, so you can choose where it runs:
@@ -120,6 +121,13 @@ OpenAI-compatible API, so you can choose where it runs:
   reachable.
 - **Hosted:** leave `base_url` empty for OpenAI, or set it to another
   OpenAI-compatible provider, and put the key in `.env` as `LLM_API_KEY`.
+
+The default `config.yaml` uses Ollama with `gemma3:4b`, which speaks
+Indonesian and can also see images — one model for both general questions
+and "jelaskan lebih detail" / "baca dokumen" / "lihat, …". Run
+`ollama pull gemma3:4b` once. With a 6 GB GPU it answers in a few seconds.
+Camera images are only sent to a cloud provider when
+`llm.allow_images_to_cloud` is true, and the assistant announces it.
 
 ## Development
 
