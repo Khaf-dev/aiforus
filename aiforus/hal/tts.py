@@ -23,6 +23,8 @@ class Pyttsx3TTS:
     ``started-word`` callback.
     """
 
+    engine_name = "pyttsx3"
+
     def __init__(
         self,
         *,

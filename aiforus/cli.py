@@ -35,6 +35,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--text", action="store_true", help="type commands instead of speaking them")
     parser.add_argument("--mute", action="store_true", help="print replies instead of speaking them")
     parser.add_argument("--check", action="store_true", help="report which components work, then exit")
+    parser.add_argument(
+        "--download-voices", action="store_true", help="download the Piper voice models from config.yaml"
+    )
     parser.add_argument("--debug", action="store_true", help="verbose logging")
     parser.add_argument("--version", action="version", version=f"aiforus {__version__}")
     return parser
@@ -69,10 +72,42 @@ def _try(components: Components, name: str, factory: Any) -> Any:
     return value
 
 
+def _build_voice(c: Components, s: Settings, language: str) -> Any:
+    """Piper when configured/available, otherwise pyttsx3 (``engine: auto``)."""
+    from .hal.piper_tts import PiperTTS
+    from .hal.tts import Pyttsx3TTS
+
+    engine = s.speech.engine
+    if engine in ("auto", "piper"):
+        piper = _try(
+            c,
+            "voice output (piper)",
+            lambda: PiperTTS(
+                voices=s.speech.piper_voices,
+                model_dir=s.piper_dir,
+                language=language,
+                volume=s.speech.volume,
+                length_scale=s.speech.piper_length_scale,
+            ),
+        )
+        if piper is not None or engine == "piper":
+            return piper
+    return _try(
+        c,
+        "voice output (pyttsx3)",
+        lambda: Pyttsx3TTS(
+            rate=s.speech.rate,
+            volume=s.speech.volume,
+            voice_hints=s.speech.voice_hints,
+            language=language,
+        ),
+    )
+
+
 def build_components(settings: Settings, args: argparse.Namespace, language: str) -> Components:
     from .hal.camera import OpenCVCamera
     from .hal.stt import GoogleSpeechInput, KeyboardInput
-    from .hal.tts import PrintTTS, Pyttsx3TTS
+    from .hal.tts import PrintTTS
     from .services.faces import DlibFaceEncoder
     from .services.llm import OpenAIAnswerer
     from .services.navigation import Navigator
@@ -81,18 +116,7 @@ def build_components(settings: Settings, args: argparse.Namespace, language: str
     c = Components()
     s = settings
 
-    voice = None
-    if not args.mute:
-        voice = _try(
-            c,
-            "voice output",
-            lambda: Pyttsx3TTS(
-                rate=s.speech.rate,
-                volume=s.speech.volume,
-                voice_hints=s.speech.voice_hints,
-                language=language,
-            ),
-        )
+    voice = None if args.mute else _build_voice(c, s, language)
     c.tts = PrintTTS(voice) if (args.text or args.mute) else voice
 
     if args.text:
@@ -155,6 +179,22 @@ def _close_quietly(*resources: Any) -> None:
                 close()
 
 
+def download_voices(settings: Settings) -> int:
+    from .hal.piper_tts import download_voice
+
+    failures = 0
+    for language, name in settings.speech.piper_voices.items():
+        print(f"[{language}] {name}")
+        try:
+            path = download_voice(name, settings.piper_dir, progress=lambda msg: print(f"  {msg}"))
+        except Exception as exc:  # network, HTTP 404, disk
+            failures += 1
+            print(f"  FAILED: {exc}")
+        else:
+            print(f"  ok: {path}")
+    return 1 if failures else 0
+
+
 def run_check(settings: Settings, args: argparse.Namespace) -> int:
     language = args.lang or settings.app.language
     print(f"AIForUs {__version__} - Python {platform.python_version()} on {platform.system()}")
@@ -166,12 +206,16 @@ def run_check(settings: Settings, args: argparse.Namespace) -> int:
 
     voice = getattr(components.tts, "_inner", components.tts)
     if voice is not None and hasattr(voice, "voice_found"):
+        engine = getattr(voice, "engine_name", "tts")
+        if engine == "piper":
+            hint = "run: python -m aiforus --download-voices"
+        else:
+            hint = "install one, or use Piper (see README)"
         for lang in SUPPORTED_LANGUAGES:
             voice.set_language(lang)
             found = voice.voice_found.get(lang)
-            print(
-                f"  TTS voice for {lang!r:<13} {'found' if found else 'NOT FOUND - install one (see README)'}"
-            )
+            label = f"TTS voice for {lang!r} ({engine})"
+            print(f"  {label:<26} {'found' if found else 'NOT FOUND - ' + hint}")
         voice.set_language(language)
     if components.camera is not None:
         frame = components.camera.capture()
@@ -274,6 +318,8 @@ def main(argv: list[str] | None = None) -> int:
         logging.getLogger().setLevel(settings.app.log_level)
         _quiet_third_party_noise()
 
+    if args.download_voices:
+        return download_voices(settings)
     if args.check:
         # The report already lists every problem; skip the duplicate warnings.
         logging.getLogger().setLevel(logging.ERROR)

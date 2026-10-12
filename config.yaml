@@ -10,18 +10,25 @@ app:
   log_level: "INFO"
 
 speech:
-  rate: 170               # words per minute for the offline TTS voice
+  rate: 170               # words per minute (pyttsx3 only; Piper uses piper_length_scale)
   volume: 1.0
   listen_timeout_s: 5
   phrase_time_limit_s: 10
-  # Substrings used to pick an installed TTS voice per language.
-  # Windows: install the Indonesian voice via Settings > Time & language > Speech.
+  # pyttsx3 only: substrings used to pick an installed OS voice per language.
   voice_hints:
     id: ["indonesian", "id-id", "id_id", "andika", "gadis"]
     en: ["english", "en-us", "en_us", "en-gb", "zira", "david"]
   recognition_locale:
     id: "id-ID"
     en: "en-US"
+  # Voice engine: auto (Piper if installed and downloaded, else pyttsx3) | piper | pyttsx3
+  engine: "auto"
+  # Piper voices per language; download with: python -m aiforus --download-voices
+  piper_voices:
+    id: "id_ID-news_tts-medium"
+    en: "en_US-lessac-medium"
+  piper_dir: "models/piper"
+  piper_length_scale: 1.0   # > 1 speaks slower, < 1 faster
 
 camera:
   index: 0

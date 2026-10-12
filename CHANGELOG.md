@@ -3,6 +3,21 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Added
+- Piper neural TTS (`piper` extra): natural offline Indonesian voice
+  (`id_ID-news_tts-medium`) and English voice (`en_US-lessac-medium`),
+  streamed per sentence and interruptible within ~50 ms.
+- `python -m aiforus --download-voices` downloads the configured voices into
+  `models/piper/` (atomic, skips files already present).
+- `speech.engine` setting: `auto` (Piper if available, else pyttsx3),
+  `piper` or `pyttsx3`. `--check` shows which engine and voices are in use.
+
+### Fixed
+- Console no longer shows comtypes cache logs and harmless torch warnings
+  (still visible with `--debug`).
+
 ## [0.2.0] — Fase 0: foundation
 
 A rewrite of the application core. The version goes *down* from 1.1.0 on

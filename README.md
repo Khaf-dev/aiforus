@@ -22,7 +22,7 @@ Today it runs on a laptop with a webcam and headphones.
 | Capability | Status | How |
 | --- | --- | --- |
 | Voice commands (id / en) | ✅ | Rule-based router, Google speech recognition (online) |
-| Spoken replies | ✅ | Offline TTS (pyttsx3), prioritised and interruptible |
+| Spoken replies | ✅ | Offline neural TTS (Piper) with a natural Indonesian voice, pyttsx3 fallback; prioritised and interruptible |
 | Describe surroundings | ✅ | YOLOv8n object detection, counts per object |
 | Read text | ✅ | EasyOCR (Indonesian + English), reading order |
 | Recognise people | ✅ | Enroll by voice, dlib face encodings, stored locally |
@@ -43,7 +43,9 @@ python -m venv .venv
 python -m pip install -U pip
 
 # Voice + camera features (downloads PyTorch, a few hundred MB)
-pip install -e ".[voice,vision]"
+pip install -e ".[voice,piper,vision]"
+# Natural offline voices for Indonesian and English (~60 MB each)
+python -m aiforus --download-voices
 # Optional: face recognition (needs CMake and the Visual Studio C++ build tools for dlib)
 pip install -e ".[faces]"
 # Optional: answers to general questions
@@ -57,10 +59,12 @@ Check what works on your machine:
 python -m aiforus --check
 ```
 
-It lists every component and whether an **Indonesian TTS voice** is
-installed. If not: *Settings → Time & language → Speech → Add voices →
-Indonesian*, then run `--check` again. Without it, Indonesian sentences are
-read by an English voice.
+It lists every component and whether a voice is available for each
+language. Speech uses [Piper](https://github.com/OHF-Voice/piper1-gpl)
+(offline, neural) when it is installed and its voices are downloaded, and
+falls back to the operating system's voices (pyttsx3) otherwise — set
+`speech.engine` in `config.yaml` to force one. Windows rarely ships an
+Indonesian voice that pyttsx3 can see, which is why Piper is recommended.
 
 Run it:
 
@@ -129,5 +133,10 @@ runs anywhere in a few seconds; CI runs it on Python 3.10–3.13.
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+Optional dependencies keep their own licenses. Notably `piper-tts` (the
+`piper` extra) is GPL-3.0-or-later, and each Piper voice model has its own
+license on its model card. Distributing a bundle that includes them must
+respect those terms.
 
 Contact: rifyatkaffa@gmail.com · [GitHub issues](https://github.com/Khaf-dev/aiforus/issues)

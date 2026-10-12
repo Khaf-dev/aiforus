@@ -53,6 +53,14 @@ class SpeechSettings(_Section):
         }
     )
     recognition_locale: dict[str, str] = Field(default_factory=lambda: {"id": "id-ID", "en": "en-US"})
+    # Voice output engine. "auto" uses Piper when it is installed and the
+    # voice model for the language has been downloaded, otherwise pyttsx3.
+    engine: Literal["auto", "piper", "pyttsx3"] = "auto"
+    piper_voices: dict[str, str] = Field(
+        default_factory=lambda: {"id": "id_ID-news_tts-medium", "en": "en_US-lessac-medium"}
+    )
+    piper_dir: Path = Path("models/piper")
+    piper_length_scale: float = Field(1.0, gt=0.3, le=3.0)  # > 1 speaks slower
 
 
 class CameraSettings(_Section):
@@ -135,6 +143,11 @@ class Settings(_Section):
     @property
     def database_path(self) -> Path:
         return self.data_dir / "aiforus.db"
+
+    @property
+    def piper_dir(self) -> Path:
+        path = self.speech.piper_dir
+        return path if path.is_absolute() else PROJECT_ROOT / path
 
 
 def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
