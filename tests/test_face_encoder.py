@@ -134,3 +134,11 @@ def test_old_opencv_is_reported(monkeypatch, tmp_path):
 def test_cosine_threshold_equivalence():
     # For unit vectors |a-b|^2 = 2 - 2cos, so L2 1.128 == cosine 0.363.
     assert np.sqrt(2 - 2 * 0.363) == pytest.approx(1.128, abs=1e-3)
+
+
+def test_detect_returns_boxes_left_to_right(cv2, tmp_path):
+    make_models(tmp_path)
+    encoder = OpenCVFaceEncoder(tmp_path)
+    cv2["detector"].rows = [row(300), row(20)]
+    boxes = encoder.detect(np.zeros((480, 640, 3), dtype=np.uint8))
+    assert boxes == [(20.0, 10.0, 50.0, 60.0), (300.0, 10.0, 50.0, 60.0)]

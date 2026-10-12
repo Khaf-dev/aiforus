@@ -46,6 +46,7 @@ vision:
   ocr_confidence: 0.5
   max_objects_spoken: 6
   max_text_regions_spoken: 5
+  face_height_m: 0.21     # typical face box height; used to measure how far people are
 
 face:
   enabled: true

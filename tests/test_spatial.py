@@ -100,3 +100,39 @@ def test_grouping_orders_nearest_first():
 )
 def test_approx_distance_for_speech(lang, meters, expected):
     assert Translator(lang).approx_distance(meters) == expected
+
+
+def _faces_test_setup():
+    from aiforus.services.spatial import with_face_distances
+
+    f = focal()
+    return with_face_distances, f
+
+
+def test_cut_off_person_is_measured_by_face():
+    with_face_distances, f = _faces_test_setup()
+    det = Detection("person", 0.9, (500, 0, 800, 720))  # body cut off by the frame
+    face_h = 0.21 * f / 1.6  # face of a person 1.6 m away
+    faces = [(600, 100, face_h * 0.8, face_h)]
+    [p] = with_face_distances([place(det, W, H, 70)], [det], faces, W, H, 70, 0.21)
+    assert p.distance_m == pytest.approx(1.6)
+    assert not p.near
+
+
+def test_small_face_far_away_keeps_body_measurement():
+    with_face_distances, f = _faces_test_setup()
+    det = person_at(8)
+    body = place(det, W, H, 70)
+    tiny = [(630, 300, 20, 24)]  # < MIN_FACE_PX
+    [p] = with_face_distances([body], [det], tiny, W, H, 70, 0.21)
+    assert p.distance_m == pytest.approx(8)
+
+
+def test_face_outside_the_person_box_and_other_classes_are_ignored():
+    with_face_distances, f = _faces_test_setup()
+    person = Detection("person", 0.9, (500, 0, 800, 720))
+    chair = person_at(2, center_x=1100, label="chair", height=0.9)
+    placements = [place(person, W, H, 70), place(chair, W, H, 70)]
+    elsewhere = [(50, 100, 100, 120)]
+    out = with_face_distances(placements, [person, chair], elsewhere, W, H, 70, 0.21)
+    assert out == placements

@@ -17,9 +17,15 @@ from ..hal import ComponentUnavailable
 logger = logging.getLogger(__name__)
 
 
+FaceBox = tuple[float, float, float, float]  # x, y, width, height in pixels
+
+
 class FaceEncoder(Protocol):
     def encode(self, frame: np.ndarray) -> list[np.ndarray]:
         """One encoding per face, ordered left to right."""
+
+    def detect(self, frame: np.ndarray) -> list[FaceBox]:
+        """Face boxes only (cheaper than encoding), ordered left to right."""
 
 
 class FaceStore(Protocol):
@@ -98,16 +104,28 @@ class OpenCVFaceEncoder:
             raise ComponentUnavailable(f"Could not load face models with OpenCV {version}: {exc}") from exc
         self._lock = threading.Lock()
 
-    def encode(self, frame: np.ndarray) -> list[np.ndarray]:
+    def _detect_rows(self, frame: np.ndarray) -> list[Any]:
+        """YuNet rows (x, y, w, h, 5 landmark pairs, score), left to right.
+        Call with the lock held."""
         height, width = frame.shape[:2]
+        self._detector.setInputSize((width, height))
+        _, faces = self._detector.detect(frame)  # BGR, as captured by OpenCV
+        if faces is None or len(faces) == 0:
+            return []
+        return sorted(faces, key=lambda r: float(r[0]))
+
+    def detect(self, frame: np.ndarray) -> list[FaceBox]:
         with self._lock:
-            self._detector.setInputSize((width, height))
-            _, faces = self._detector.detect(frame)  # BGR, as captured by OpenCV
-            if faces is None or len(faces) == 0:
+            rows = self._detect_rows(frame)
+        return [(float(r[0]), float(r[1]), float(r[2]), float(r[3])) for r in rows]
+
+    def encode(self, frame: np.ndarray) -> list[np.ndarray]:
+        with self._lock:
+            rows = self._detect_rows(frame)
+            if not rows:
                 return []
             encodings = []
-            # Each row: x, y, w, h, 5 landmark (x, y) pairs, score. Left to right.
-            for row in sorted(faces, key=lambda r: float(r[0])):
+            for row in rows:
                 aligned = self._recognizer.alignCrop(frame, row)
                 feature = np.asarray(self._recognizer.feature(aligned), dtype=np.float64).reshape(-1)
                 norm = float(np.linalg.norm(feature))
@@ -143,6 +161,18 @@ class DlibFaceEncoder:
         # in the order the user would scan the scene.
         paired = sorted(zip(locations, encodings, strict=True), key=lambda pair: pair[0][3])
         return [np.asarray(enc, dtype=np.float64) for _, enc in paired]
+
+    def detect(self, frame: np.ndarray) -> list[FaceBox]:
+        import face_recognition
+
+        rgb = np.ascontiguousarray(frame[:, :, ::-1])
+        with self._lock:
+            locations = face_recognition.face_locations(rgb, model=self._model)
+        boxes = [
+            (float(left), float(top), float(right - left), float(bottom - top))
+            for top, right, bottom, left in locations
+        ]
+        return sorted(boxes)
 
 
 class EnrollStatus(Enum):
@@ -228,6 +258,9 @@ class FaceService:
         if encoding is None:
             return EnrollResult(status, name, existing)
         return self.add_samples(name, [encoding])
+
+    def detect_faces(self, frame: np.ndarray) -> list[FaceBox]:
+        return self._encoder.detect(frame)
 
     def identify(self, frame: np.ndarray) -> list[FaceMatch]:
         encodings = self._encoder.encode(frame)

@@ -23,7 +23,7 @@ from .intents import Intent, IntentRouter, IntentType
 from .services.faces import EnrollStatus, FaceService, normalize_name
 from .services.llm import Answerer
 from .services.navigation import NavigationError, NavigationSession, Navigator, describe_step
-from .services.spatial import group_placements, place
+from .services.spatial import group_placements, place, with_face_distances
 from .services.vision import Look, VisionService, VisionStatus, summarize
 from .speech import Priority, SpeechQueue
 from .storage import PreferenceStore
@@ -259,13 +259,29 @@ class Assistant:
         groups = summarize(detections, self.settings.vision.max_objects_spoken)
         return self.tr.join([self.tr.count_label(label, count) for label, count in groups])
 
-    def _describe_objects(self, look: Look) -> str:
+    async def _face_boxes(self, look: Look) -> list:
+        """Face boxes in the frame, only when a person was detected."""
+        if self.faces is None or look.frame is None:
+            return []
+        if not any(d.label == "person" for d in look.detections):
+            return []
+        try:
+            return await asyncio.to_thread(self.faces.detect_faces, look.frame)
+        except Exception:
+            logger.exception("Face detection for distance failed")
+            return []
+
+    def _describe_objects(self, look: Look, faces: list | None = None) -> str:
         """ "Orang di jam 12, sekitar 3 meter. Kursi di jam 1, sekitar 1,5 meter." """
         if look.frame_size is None:
             return self.tr.t("scene_objects", items=self._object_phrase(look.detections))
         width, height = look.frame_size
         fov = self.settings.camera.horizontal_fov_deg
-        groups = group_placements([place(d, width, height, fov) for d in look.detections])
+        placements = [place(d, width, height, fov) for d in look.detections]
+        placements = with_face_distances(
+            placements, look.detections, faces or [], width, height, fov, self.settings.vision.face_height_m
+        )
+        groups = group_placements(placements)
         limit = self.settings.vision.max_objects_spoken
         sentences = []
         for group in groups[:limit]:
@@ -310,7 +326,7 @@ class Assistant:
         if look is None:
             return
         if look.detections:
-            self.speech.say(self._describe_objects(look), Priority.HIGH)
+            self.speech.say(self._describe_objects(look, await self._face_boxes(look)), Priority.HIGH)
         else:
             self.say("scene_nothing")
         if look.texts:
@@ -321,7 +337,7 @@ class Assistant:
         if look is None:
             return
         if look.detections:
-            self.speech.say(self._describe_objects(look), Priority.HIGH)
+            self.speech.say(self._describe_objects(look, await self._face_boxes(look)), Priority.HIGH)
         else:
             self.say("scene_nothing")
 

@@ -88,6 +88,10 @@ class VisionSettings(_Section):
     ocr_confidence: float = Field(0.5, ge=0.0, le=1.0)
     max_objects_spoken: int = Field(6, ge=1)
     max_text_regions_spoken: int = Field(5, ge=1)
+    # Typical height of a detected face box (forehead to chin), used to
+    # estimate how far away a person is from the size of their face. Works
+    # even when their body is cut off by the frame. Calibrate if needed.
+    face_height_m: float = Field(0.21, gt=0.1, lt=0.4)
 
 
 class FaceSettings(_Section):

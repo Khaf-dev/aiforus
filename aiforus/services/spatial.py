@@ -17,7 +17,7 @@ must never be used as a safety guarantee.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from .vision import Detection
 
@@ -103,9 +103,7 @@ def place(detection: Detection, width: int, height: int, horizontal_fov_deg: flo
     if cut_off:
         near = box_height >= _NEAR_HEIGHT_FRACTION * height
     elif real_height is not None:
-        vfov = math.radians(vertical_fov_deg(horizontal_fov_deg, width, height))
-        focal_px = (height / 2) / math.tan(vfov / 2)
-        distance = real_height * focal_px / box_height
+        distance = real_height * focal_length_px(width, height, horizontal_fov_deg) / box_height
 
     return Placement(
         label=detection.label,
@@ -115,6 +113,55 @@ def place(detection: Detection, width: int, height: int, horizontal_fov_deg: flo
         near=near,
         confidence=detection.confidence,
     )
+
+
+def focal_length_px(width: int, height: int, horizontal_fov_deg: float) -> float:
+    vfov = math.radians(vertical_fov_deg(horizontal_fov_deg, width, height))
+    return (height / 2) / math.tan(vfov / 2)
+
+
+# Below this face height (pixels) the face is too small to measure reliably,
+# so the body height is used instead (~5 m away on a 720p, 70 deg webcam).
+MIN_FACE_PX = 40.0
+
+
+def with_face_distances(
+    placements: list[Placement],
+    detections: list[Detection],
+    faces: list[tuple[float, float, float, float]],
+    width: int,
+    height: int,
+    horizontal_fov_deg: float,
+    face_height_m: float,
+) -> list[Placement]:
+    """Measure people by their face when it's visible.
+
+    A webcam only sees a standing person from head to toe beyond ~2.5 m, so
+    closer people are cut off by the frame and their body height can't be
+    used. Their face usually is fully visible, and face height varies much
+    less between adults than body height (and not at all when they sit).
+
+    ``placements`` and ``detections`` must be parallel lists.
+    """
+    if not faces:
+        return placements
+    focal = focal_length_px(width, height, horizontal_fov_deg)
+    result = []
+    for placement, detection in zip(placements, detections, strict=True):
+        if detection.label != "person":
+            result.append(placement)
+            continue
+        x1, y1, x2, y2 = detection.box
+        inside = [f for f in faces if x1 <= f[0] + f[2] / 2 <= x2 and y1 <= f[1] + f[3] / 2 <= y2]
+        if not inside:
+            result.append(placement)
+            continue
+        face_px = max(f[3] for f in inside)
+        if placement.distance_m is None or face_px >= MIN_FACE_PX:
+            distance = face_height_m * focal / max(face_px, 1.0)
+            placement = replace(placement, distance_m=distance, near=False)
+        result.append(placement)
+    return result
 
 
 @dataclass(frozen=True)

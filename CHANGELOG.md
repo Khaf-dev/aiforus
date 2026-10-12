@@ -12,6 +12,10 @@ All notable changes to this project are documented here. The format follows
   the pinhole model and a typical height per object class; boxes cut off by
   the frame are reported as "sangat dekat" without a number. Nearest first,
   the rest summarised.
+- People are measured by the size of their face when it is visible
+  (`vision.face_height_m`, default 0.21 m), so someone 1–2.5 m away — whose
+  body doesn't fit in a webcam frame — gets a distance instead of
+  "sangat dekat". Small faces (far away) fall back to body height.
 - **Face recognition with OpenCV YuNet + SFace** (default `face.backend:
   opencv`): ONNX models (~40 MB, or ~10 MB with `face.quantized: true`) that
   run on edge devices, no dlib/C++ build needed. dlib remains available as

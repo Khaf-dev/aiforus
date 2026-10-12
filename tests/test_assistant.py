@@ -73,6 +73,11 @@ class StubEncoder:
             return list(self.script.pop(0))
         return list(self.next)
 
+    boxes: list = []
+
+    def detect(self, frame):
+        return list(self.boxes)
+
 
 class StubNavigator:
     def __init__(self, error=None):
@@ -284,6 +289,17 @@ async def test_object_under_one_meter(tmp_path):
     labels = [at("cup", 0.6), at("cup", 0.8)]
     async with Harness(tmp_path, frames=[textured_frame(size=HD)], labels=labels, texts=[]) as h:
         assert await h.say("benda apa") == ["2 cangkir di jam 12, yang terdekat kurang dari 1 meter."]
+
+
+@pytest.mark.parametrize(
+    "face_px, expected",
+    [(240, "Orang di jam 12, kurang dari 1 meter."), (120, "Orang di jam 12, sekitar 1,5 meter.")],
+)
+async def test_person_cut_off_by_frame_is_measured_by_face(tmp_path, face_px, expected):
+    body = Detection("person", 0.9, (500, 0, 800, 720))
+    async with Harness(tmp_path, frames=[textured_frame(size=HD)], labels=[body], texts=[]) as h:
+        h.encoder.boxes = [(600, 80, face_px * 0.8, face_px)]
+        assert await h.say("apa di depan") == [expected]
 
 
 async def test_object_cut_off_by_frame_is_very_close(tmp_path):
