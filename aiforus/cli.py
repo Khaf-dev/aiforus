@@ -15,7 +15,7 @@ from pydantic import ValidationError
 
 from . import __version__
 from .assistant import Assistant
-from .config import SUPPORTED_LANGUAGES, Settings, load_settings
+from .config import PROJECT_ROOT, SUPPORTED_LANGUAGES, Settings, load_settings
 from .hal import ComponentUnavailable
 from .hal.location import IpLocationProvider
 from .i18n import Translator
@@ -110,9 +110,10 @@ def build_components(settings: Settings, args: argparse.Namespace, language: str
         )
 
     c.camera = _try(c, "camera", lambda: OpenCVCamera(s.camera))
-    c.detector = _try(
-        c, "object detection", lambda: YoloDetector(s.vision.detector_model, s.vision.detection_confidence)
-    )
+    model = s.vision.detector_model
+    if (PROJECT_ROOT / model).exists():  # don't re-download when run from another folder
+        model = str(PROJECT_ROOT / model)
+    c.detector = _try(c, "object detection", lambda: YoloDetector(model, s.vision.detection_confidence))
     c.reader = _try(c, "text reading", lambda: EasyOcrReader(s.vision.ocr_languages, s.vision.ocr_confidence))
     if s.face.enabled:
         c.face_encoder = _try(c, "face recognition", lambda: DlibFaceEncoder(s.face.detection_model))

@@ -432,3 +432,15 @@ async def test_run_loop_handles_commands_and_warns_once_when_offline(tmp_path, m
 async def test_empty_input_is_ignored(tmp_path, utterance):
     async with Harness(tmp_path) as h:
         assert await h.say(utterance) == []
+
+
+async def test_run_in_daemon_thread_returns_and_raises():
+    from aiforus.assistant import run_in_daemon_thread
+
+    assert await run_in_daemon_thread(lambda: 42) == 42
+
+    def boom():
+        raise ValueError("x")
+
+    with pytest.raises(ValueError):
+        await run_in_daemon_thread(boom)

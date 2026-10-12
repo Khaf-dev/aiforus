@@ -5,6 +5,7 @@ from __future__ import annotations
 import concurrent.futures
 import logging
 import queue
+import sys
 import threading
 from typing import Any
 
@@ -94,6 +95,15 @@ class Pyttsx3TTS:
             self._engine.stop()
 
     def _run(self, rate: int, volume: float, language: str, ready: concurrent.futures.Future[None]) -> None:
+        if sys.platform == "win32":
+            # SAPI5 is a COM API; COM must be initialised in every thread
+            # that uses it, not just the main thread.
+            try:
+                import comtypes
+
+                comtypes.CoInitialize()
+            except Exception:
+                logger.debug("COM initialisation failed", exc_info=True)
         try:
             import pyttsx3
 

@@ -8,9 +8,12 @@ the assistant then says the feature isn't available instead of crashing.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
+import threading
 import time
 from collections.abc import Awaitable, Callable
+from typing import Any, TypeVar
 
 from .config import SUPPORTED_LANGUAGES, Settings
 from .hal.location import Location, LocationProvider
@@ -27,6 +30,36 @@ from .storage import PreferenceStore
 logger = logging.getLogger(__name__)
 
 Handler = Callable[[Intent], Awaitable[None]]
+T = TypeVar("T")
+
+
+def run_in_daemon_thread(fn: Callable[[], T]) -> asyncio.Future[T]:
+    """Like ``asyncio.to_thread`` but on a daemon thread.
+
+    Executor threads are joined at interpreter exit, so a listener blocked in
+    ``input()`` or on the microphone would keep the process alive after
+    Ctrl+C. A daemon thread doesn't.
+    """
+    loop = asyncio.get_running_loop()
+    future: asyncio.Future[T] = loop.create_future()
+
+    def deliver(setter: Callable[[Any], None], value: Any) -> None:
+        if not future.done():
+            setter(value)
+
+    def target() -> None:
+        try:
+            result = fn()
+        except BaseException as exc:  # forwarded to the awaiting task
+            with contextlib.suppress(RuntimeError):  # loop already closed
+                loop.call_soon_threadsafe(deliver, future.set_exception, exc)
+        else:
+            with contextlib.suppress(RuntimeError):
+                loop.call_soon_threadsafe(deliver, future.set_result, result)
+
+    threading.Thread(target=target, name="listener", daemon=True).start()
+    return future
+
 
 _VISION_PROBLEMS = {
     VisionStatus.UNAVAILABLE: "vision_unavailable",
@@ -125,7 +158,7 @@ class Assistant:
                 # Don't transcribe our own voice.
                 await self.speech.wait_idle()
             try:
-                text = await asyncio.to_thread(listener.listen)
+                text = await run_in_daemon_thread(listener.listen)
             except SpeechServiceError as exc:
                 logger.warning("Speech recognition service error: %s", exc)
                 now = time.monotonic()
