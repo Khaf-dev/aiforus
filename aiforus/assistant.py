@@ -1,0 +1,433 @@
+"""The assistant: turns recognised intents into actions and speech.
+
+All dependencies are injected, so this module never imports hardware or ML
+libraries and is fully testable with fakes. Optional components may be None;
+the assistant then says the feature isn't available instead of crashing.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+import time
+from collections.abc import Awaitable, Callable
+
+from .config import SUPPORTED_LANGUAGES, Settings
+from .hal.location import Location, LocationProvider
+from .hal.stt import SpeechInput, SpeechServiceError
+from .i18n import Translator
+from .intents import Intent, IntentRouter, IntentType
+from .services.faces import EnrollStatus, FaceService, normalize_name
+from .services.llm import Answerer
+from .services.navigation import NavigationError, NavigationSession, Navigator, describe_step
+from .services.vision import VisionService, VisionStatus, summarize
+from .speech import Priority, SpeechQueue
+from .storage import PreferenceStore
+
+logger = logging.getLogger(__name__)
+
+Handler = Callable[[Intent], Awaitable[None]]
+
+_VISION_PROBLEMS = {
+    VisionStatus.UNAVAILABLE: "vision_unavailable",
+    VisionStatus.NO_CAMERA: "camera_unavailable",
+    VisionStatus.DARK: "camera_dark",
+    VisionStatus.BLANK: "camera_blocked",
+}
+
+
+class Assistant:
+    STT_WARNING_INTERVAL_S = 60.0
+    LOCATION_TIMEOUT_S = 5.0
+    ENROLL_SETTLE_S = 1.0  # pause between "hold still" and taking the photo
+
+    def __init__(
+        self,
+        *,
+        settings: Settings,
+        speech: SpeechQueue,
+        translator: Translator,
+        router: IntentRouter | None = None,
+        vision: VisionService | None = None,
+        faces: FaceService | None = None,
+        navigator: Navigator | None = None,
+        location: LocationProvider | None = None,
+        answerer: Answerer | None = None,
+        prefs: PreferenceStore | None = None,
+        on_language_change: Callable[[str], object] | None = None,
+    ) -> None:
+        self.settings = settings
+        self.speech = speech
+        self.tr = translator
+        self.router = router or IntentRouter()
+        self.vision = vision
+        self.faces = faces
+        self.navigator = navigator
+        self.location = location
+        self.answerer = answerer
+        self.prefs = prefs
+        self._on_language_change = on_language_change
+
+        self.running = True
+        self.navigation: NavigationSession | None = None
+        self._pending_exit = False
+        self._last_stt_warning = float("-inf")
+        self._handlers: dict[IntentType, Handler] = {
+            IntentType.EMERGENCY: self._emergency,
+            IntentType.CONFIRM_YES: self._nothing_to_confirm,
+            IntentType.CONFIRM_NO: self._nothing_to_confirm,
+            IntentType.STOP_SPEAKING: self._stop_speaking,
+            IntentType.EXIT: self._ask_exit,
+            IntentType.HELP_MENU: self._help,
+            IntentType.CHANGE_LANGUAGE: self._change_language,
+            IntentType.DESCRIBE_SCENE: self._describe_scene,
+            IntentType.DETECT_OBJECTS: self._detect_objects,
+            IntentType.READ_TEXT: self._read_text,
+            IntentType.RECOGNIZE_FACES: self._recognize_faces,
+            IntentType.ENROLL_FACE: self._enroll_face,
+            IntentType.FORGET_FACE: self._forget_face,
+            IntentType.LIST_FACES: self._list_faces,
+            IntentType.NAVIGATE: self._navigate,
+            IntentType.NEXT_DIRECTION: self._next_direction,
+            IntentType.REPEAT_DIRECTION: self._repeat_direction,
+            IntentType.WHERE_AM_I: self._where_am_i,
+            IntentType.SOUND: self._sound,
+            IntentType.GENERAL_QUESTION: self._general_question,
+        }
+
+    # -- helpers -----------------------------------------------------------
+
+    def say(self, key: str, priority: Priority = Priority.HIGH, **params: object) -> asyncio.Future[bool]:
+        return self.speech.say(self.tr.t(key, **params), priority)
+
+    async def _locate(self) -> Location | None:
+        if self.location is None:
+            return None
+        try:
+            return await asyncio.wait_for(asyncio.to_thread(self.location.locate), self.LOCATION_TIMEOUT_S)
+        except asyncio.TimeoutError:
+            logger.warning("Location lookup timed out")
+            return None
+
+    def _vision_problem(self, status: VisionStatus) -> bool:
+        key = _VISION_PROBLEMS.get(status)
+        if key is None:
+            return False
+        self.say(key)
+        return True
+
+    # -- main loop ---------------------------------------------------------
+
+    async def run(self, listener: SpeechInput) -> None:
+        self.say("ready", Priority.NORMAL)
+        while self.running and not listener.closed:
+            if listener.half_duplex:
+                # Don't transcribe our own voice.
+                await self.speech.wait_idle()
+            try:
+                text = await asyncio.to_thread(listener.listen)
+            except SpeechServiceError as exc:
+                logger.warning("Speech recognition service error: %s", exc)
+                now = time.monotonic()
+                if now - self._last_stt_warning > self.STT_WARNING_INTERVAL_S:
+                    self._last_stt_warning = now
+                    self.say("stt_offline", Priority.HIGH)
+                await asyncio.sleep(2)
+                continue
+            except Exception:
+                logger.exception("Listening failed")
+                await asyncio.sleep(1)
+                continue
+            if text:
+                await self.handle(text)
+        await self.speech.wait_idle()
+
+    async def handle(self, utterance: str) -> None:
+        intent = self.router.parse(utterance)
+        logger.debug("INTENT %s %s", intent.type.value, intent.slots or "")
+        if intent.type is IntentType.EMPTY:
+            return
+
+        if self._pending_exit:
+            self._pending_exit = False
+            if intent.type is IntentType.CONFIRM_YES:
+                await self._exit()
+                return
+            if intent.type is IntentType.CONFIRM_NO:
+                self.say("exit_cancelled")
+                return
+            # Anything else cancels the pending exit and is handled normally.
+
+        handler = self._handlers.get(intent.type)
+        if handler is None:
+            self.say("unknown")
+            return
+        try:
+            await handler(intent)
+        except Exception:
+            logger.exception("Handler for %s failed", intent.type.value)
+            self.say("error")
+
+    # -- control -----------------------------------------------------------
+
+    async def _emergency(self, intent: Intent) -> None:
+        number = self.settings.emergency.local_emergency_number
+        # Speak immediately; never wait on the network before giving guidance.
+        message = " ".join(
+            [
+                self.tr.t("emergency_start"),
+                self.tr.t("emergency_no_send"),
+                self.tr.t("emergency_call", number=number),
+            ]
+        )
+        self.speech.say(message, Priority.CRITICAL)
+        location = await self._locate()
+        if location is not None:
+            self.speech.say(
+                self.tr.t("emergency_location", address=location.label), Priority.CRITICAL, flush=False
+            )
+        else:
+            self.speech.say(self.tr.t("emergency_location_unknown"), Priority.CRITICAL, flush=False)
+
+    async def _nothing_to_confirm(self, intent: Intent) -> None:
+        self.say("nothing_to_confirm")
+
+    async def _stop_speaking(self, intent: Intent) -> None:
+        self.speech.stop_all()
+
+    async def _ask_exit(self, intent: Intent) -> None:
+        self._pending_exit = True
+        self.say("exit_confirm")
+
+    async def _exit(self) -> None:
+        await self.speech.say_and_wait(self.tr.t("exit_bye"), Priority.HIGH)
+        self.running = False
+
+    async def _help(self, intent: Intent) -> None:
+        self.say("help_menu")
+
+    async def _change_language(self, intent: Intent) -> None:
+        language = intent.slots.get("language", "unsupported")
+        if language not in SUPPORTED_LANGUAGES:
+            self.say("language_unsupported")
+            return
+        self.tr.language = language
+        if self._on_language_change is not None:
+            await asyncio.to_thread(self._on_language_change, language)
+        if self.prefs is not None:
+            self.prefs.set("language", language)
+        self.say("language_changed")
+
+    # -- vision ------------------------------------------------------------
+
+    def _object_phrase(self, detections: list) -> str:
+        groups = summarize(detections, self.settings.vision.max_objects_spoken)
+        return self.tr.join([self.tr.count_label(label, count) for label, count in groups])
+
+    async def _look(self, *, objects: bool, text: bool):
+        """Acknowledge, capture and analyse; None if a problem was reported."""
+        if self.vision is None or not self.vision.can(objects=objects, text=text):
+            self.say("vision_unavailable")
+            return None
+        ack = self.say("looking", Priority.LOW)
+        look = await self.vision.look(objects=objects, text=text)
+        self.speech.discard(ack)
+        if self._vision_problem(look.status):
+            return None
+        return look
+
+    async def _describe_scene(self, intent: Intent) -> None:
+        with_text = self.vision is not None and self.vision.can(objects=True, text=True)
+        look = await self._look(objects=True, text=with_text)
+        if look is None:
+            return
+        if look.detections:
+            self.say("scene_objects", items=self._object_phrase(look.detections))
+        else:
+            self.say("scene_nothing")
+        if look.texts:
+            self.say("scene_has_text", Priority.NORMAL)
+
+    async def _detect_objects(self, intent: Intent) -> None:
+        look = await self._look(objects=True, text=False)
+        if look is None:
+            return
+        if look.detections:
+            self.say("scene_objects", items=self._object_phrase(look.detections))
+        else:
+            self.say("scene_nothing")
+
+    async def _read_text(self, intent: Intent) -> None:
+        look = await self._look(objects=False, text=True)
+        if look is None:
+            return
+        if not look.texts:
+            self.say("text_none")
+            return
+        limit = self.settings.vision.max_text_regions_spoken
+        self.say("text_found", count=len(look.texts))
+        for region in look.texts[:limit]:
+            self.speech.say(region.text, Priority.HIGH)
+        if len(look.texts) > limit:
+            self.say("text_more", Priority.NORMAL, count=len(look.texts) - limit)
+
+    # -- faces -------------------------------------------------------------
+
+    async def _recognize_faces(self, intent: Intent) -> None:
+        if self.faces is None or self.vision is None or not self.vision.can():
+            self.say("faces_unavailable")
+            return
+        ack = self.say("looking", Priority.LOW)
+        status, frame = await self.vision.capture()
+        if frame is None:
+            self.speech.discard(ack)
+            self._vision_problem(status)
+            return
+        matches = await asyncio.to_thread(self.faces.identify, frame)
+        self.speech.discard(ack)
+        if not matches:
+            self.say("faces_none")
+            return
+        self.say("faces_seen", count=len(matches))
+        known = list(dict.fromkeys(m.name for m in matches if m.name))
+        unknown = sum(1 for m in matches if m.name is None)
+        if known:
+            self.say("faces_known", names=self.tr.join(known))
+        if unknown:
+            self.say("faces_unknown", count=unknown)
+
+    async def _enroll_face(self, intent: Intent) -> None:
+        if self.faces is None or self.vision is None or not self.vision.can():
+            self.say("faces_unavailable")
+            return
+        name = normalize_name(intent.slots.get("name", ""))
+        if not name:
+            self.say("enroll_need_name")
+            return
+        # Let the user hear the instruction before the photo is taken.
+        await self.speech.say_and_wait(self.tr.t("enroll_look", name=name), Priority.HIGH)
+        await asyncio.sleep(self.ENROLL_SETTLE_S)
+        status, frame = await self.vision.capture()
+        if frame is None:
+            self._vision_problem(status)
+            return
+        result = await asyncio.to_thread(self.faces.enroll, name, frame)
+        if result.status is EnrollStatus.OK:
+            self.say("enroll_ok", name=result.name, count=result.samples)
+        elif result.status is EnrollStatus.MULTIPLE_FACES:
+            self.say("enroll_multiple", name=result.name)
+        elif result.status is EnrollStatus.FULL:
+            self.say("enroll_full", name=result.name, max=self.settings.face.max_samples_per_person)
+        elif result.status is EnrollStatus.INVALID_NAME:
+            self.say("enroll_need_name")
+        else:
+            self.say("enroll_no_face")
+
+    async def _forget_face(self, intent: Intent) -> None:
+        if self.faces is None:
+            self.say("faces_unavailable")
+            return
+        raw = intent.slots.get("name", "")
+        if not normalize_name(raw):
+            self.say("forget_need_name")
+            return
+        removed, name = await asyncio.to_thread(self.faces.forget, raw)
+        self.say("forget_ok" if removed else "forget_missing", name=name)
+
+    async def _list_faces(self, intent: Intent) -> None:
+        if self.faces is None:
+            self.say("faces_unavailable")
+            return
+        people = await asyncio.to_thread(self.faces.known_people)
+        if people:
+            self.say("people_list", count=len(people), names=self.tr.join(people))
+        else:
+            self.say("people_none")
+
+    # -- navigation --------------------------------------------------------
+
+    async def _navigate(self, intent: Intent) -> None:
+        if self.navigator is None:
+            self.say("nav_unavailable")
+            return
+        destination = intent.slots.get("destination")
+        if not destination:
+            self.say("nav_need_destination")
+            return
+        ack = self.say("nav_searching", Priority.LOW)
+        start = await self._locate()
+        if start is None:
+            self.speech.discard(ack)
+            self.say("nav_no_location")
+            return
+        try:
+            place = await asyncio.to_thread(self.navigator.geocode, destination, start, self.tr.language)
+            route = await asyncio.to_thread(self.navigator.route, start, place)
+        except NavigationError as exc:
+            self.speech.discard(ack)
+            key = {"not_found": "nav_dest_not_found", "no_route": "nav_no_route"}.get(exc.kind, "nav_network")
+            self.say(key, destination=destination)
+            return
+        self.speech.discard(ack)
+
+        self.navigation = NavigationSession(route, start=start)
+        self.say(
+            "nav_route",
+            destination=route.destination,
+            distance=self.tr.distance(route.distance_m),
+            minutes=self.navigator.walking_minutes(route),
+        )
+        if start.is_approximate:
+            self.say("nav_location_approx")
+        self.say("nav_no_obstacle")
+        first = self.navigation.current
+        if first is not None:
+            self.speech.say(describe_step(first, self.tr), Priority.HIGH)
+        self.say("nav_next_hint", Priority.LOW)
+
+    async def _next_direction(self, intent: Intent) -> None:
+        if self.navigation is None:
+            self.say("nav_no_active_route")
+            return
+        step = self.navigation.advance()
+        if step is None:
+            self.say("nav_finished")
+            return
+        self.speech.say(describe_step(step, self.tr), Priority.HIGH)
+
+    async def _repeat_direction(self, intent: Intent) -> None:
+        current = self.navigation.current if self.navigation is not None else None
+        if current is None:
+            self.say("nav_no_active_route")
+            return
+        self.speech.say(describe_step(current, self.tr), Priority.HIGH)
+
+    async def _where_am_i(self, intent: Intent) -> None:
+        location = await self._locate()
+        if location is None:
+            self.say("where_unknown")
+        else:
+            self.say("where_am_i", address=location.label)
+
+    # -- other -------------------------------------------------------------
+
+    async def _sound(self, intent: Intent) -> None:
+        self.say("sound_unavailable")
+
+    async def _general_question(self, intent: Intent) -> None:
+        if self.answerer is None:
+            self.say("llm_unavailable")
+            return
+        question = intent.slots.get("question", intent.text)
+        try:
+            answer = await asyncio.wait_for(
+                self.answerer.answer(question, self.tr.language), self.settings.llm.timeout_s + 2
+            )
+        except Exception:
+            logger.exception("LLM request failed")
+            self.say("llm_error")
+            return
+        if answer:
+            self.speech.say(answer, Priority.HIGH)
+        else:
+            self.say("unknown")

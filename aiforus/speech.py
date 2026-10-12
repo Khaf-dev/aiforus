@@ -126,6 +126,11 @@ class SpeechQueue:
     async def say_and_wait(self, text: str, priority: Priority = Priority.HIGH) -> bool:
         return await self.say(text, priority)
 
+    def discard(self, future: asyncio.Future[bool]) -> None:
+        """Drop a still-waiting utterance, e.g. a "one moment" acknowledgement
+        whose result is already available. No-op once it started speaking."""
+        self._drop_pending(lambda item: item.done is future)
+
     def stop_all(self) -> None:
         """Drop everything queued and cut off the current utterance."""
         self._drop_pending(lambda item: True)
@@ -163,7 +168,7 @@ class SpeechQueue:
             item = heapq.heappop(self._heap)
             self._current = item
             self._current_interrupted = False
-            logger.info("SAY[%s]: %s", Priority(item.priority).name, item.text)
+            logger.debug("SAY[%s]: %s", Priority(item.priority).name, item.text)
             if self._on_say is not None:
                 self._on_say(item.text, Priority(item.priority))
             try:

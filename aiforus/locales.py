@@ -25,6 +25,7 @@ MESSAGES: dict[str, dict[str, str]] = {
             "dan 'matikan asisten' untuk keluar."
         ),
         "looking": "Sebentar, aku lihat dulu.",
+        "stt_offline": "Pengenalan suara tidak bisa terhubung ke internet. Periksa koneksi.",
         # Camera / vision
         "vision_unavailable": "Fitur penglihatan belum terpasang di perangkat ini.",
         "camera_unavailable": "Kamera tidak tersedia. Aku tidak bisa melihat sekarang.",
@@ -139,6 +140,7 @@ MESSAGES: dict[str, dict[str, str]] = {
             "and 'turn off assistant' to exit."
         ),
         "looking": "One moment, let me look.",
+        "stt_offline": "Speech recognition can't reach the internet. Please check the connection.",
         "vision_unavailable": "Vision features are not installed on this device.",
         "camera_unavailable": "The camera is not available. I can't see right now.",
         "camera_dark": "The image is too dark. I can't see clearly.",

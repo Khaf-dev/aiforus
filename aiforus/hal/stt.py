@@ -96,9 +96,12 @@ class GoogleSpeechInput:
 
 
 class KeyboardInput:
-    """Type commands instead of speaking them (``--text`` mode)."""
+    """Type commands instead of speaking them (``--text`` mode).
 
-    half_duplex = False
+    Half-duplex too, so the prompt appears after the assistant's reply.
+    """
+
+    half_duplex = True
 
     def __init__(self, prompt: str = "Kamu: ") -> None:
         self._prompt = prompt

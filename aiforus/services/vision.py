@@ -191,20 +191,33 @@ class VisionService:
                 except Exception:
                     logger.exception("Warm-up failed for %s", type(component).__name__)
 
-    async def look(self, *, objects: bool = True, text: bool = False) -> Look:
-        if self.camera is None or (objects and self.detector is None) or (text and self.reader is None):
-            return Look(VisionStatus.UNAVAILABLE)
+    def can(self, *, objects: bool = False, text: bool = False) -> bool:
+        if self.camera is None:
+            return False
+        return not ((objects and self.detector is None) or (text and self.reader is None))
+
+    async def capture(self) -> tuple[VisionStatus, np.ndarray | None]:
+        """Grab a fresh frame and check that it's usable."""
+        if self.camera is None:
+            return VisionStatus.UNAVAILABLE, None
         frame = await asyncio.to_thread(self.camera.capture)
         if frame is None:
-            return Look(VisionStatus.NO_CAMERA)
+            return VisionStatus.NO_CAMERA, None
         quality = assess_frame(
             frame, self._camera_settings.dark_threshold, self._camera_settings.blank_std_threshold
         )
         if quality is FrameQuality.DARK:
-            return Look(VisionStatus.DARK)
+            return VisionStatus.DARK, None
         if quality is FrameQuality.BLANK:
-            return Look(VisionStatus.BLANK)
+            return VisionStatus.BLANK, None
+        return VisionStatus.OK, frame
 
+    async def look(self, *, objects: bool = True, text: bool = False) -> Look:
+        if (objects and self.detector is None) or (text and self.reader is None):
+            return Look(VisionStatus.UNAVAILABLE)
+        status, frame = await self.capture()
+        if frame is None:
+            return Look(status)
         look = Look(VisionStatus.OK)
         if objects and self.detector is not None:
             look.detections = await asyncio.to_thread(self.detector.detect, frame)

@@ -1,4 +1,21 @@
-"""Sound Localization Module - Detects and localizes audio sources for navigation assistance"""
+"""LEGACY — kept for reference only, not imported anywhere.
+
+This is the v1.1 sound localization / obstacle detection module. It was
+removed from the assistant in v0.2.0 because its results can't be trusted:
+
+* "8-direction localization" is derived from where the loudest sample falls
+  inside a mono buffer, which carries no direction information. Real
+  direction finding needs at least two microphones (TDOA / beamforming).
+* "Echo obstacle detection" only ever evaluates a single autocorrelation lag
+  with the default config (chunk 1024 @ 16 kHz), so every periodic sound is
+  reported as an obstacle at ~1.37 m. Passive echoes of ambient sound are
+  not a reliable ranging method anyway.
+
+Planned replacement (Fase 2): pretrained sound-event classification
+(YAMNet / PANNs) for horns and sirens, direction from a 2+ mic array, and
+obstacle detection from vision (depth estimation) or a ToF sensor.
+"""
+
 
 import logging
 import numpy as np

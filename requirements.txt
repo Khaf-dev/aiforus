@@ -1,40 +1,5 @@
-# Core AI/ML
-torch
-torchvision
-transformers
-openai
-
-# Computer Vision
-opencv-python-headless
-pillow
-easyocr
-ultralytics
-
-# Speech processing
-speechrecognition
-pyttsx3
-gtts
-
-# Audio processing (for sound localization - v1.1+)
-librosa>=0.10.0
-scipy>=1.10.0
-
-# APIs 
-fastapi
-uvicorn[standard]
-requests
-geocoder
-
-# Database
-sqlalchemy
-alembic
-
-# Utilities
-python-dotenv
-pyyaml
-numpy
-
-# Optional (comment if not needed)
-pyaudio # Might need manual installation
-geopy # For navigation features
-langchain
+# Dependencies are declared in pyproject.toml. This file installs everything:
+#   pip install -r requirements.txt
+# For a lighter install pick extras instead, e.g.:
+#   pip install -e ".[voice,vision]"
+-e .[all]
