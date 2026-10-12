@@ -19,8 +19,8 @@ honest pre-1.0 research prototype.
 - Dark, covered or missing cameras are reported as "I can't see", never as
   "nothing in front of you".
 - Sound localization and echo obstacle detection were removed (they returned
-  arbitrary directions and a constant 1.37 m obstacle). The module is kept,
-  unwired, in `experimental/` with an explanation.
+  arbitrary directions and a constant 1.37 m obstacle).
+- The full v1.1 code and docs remain available at the `v1.1.0-legacy` tag.
 - Navigation always reminds the user that obstacles aren't detected and
   that IP-based location is approximate.
 

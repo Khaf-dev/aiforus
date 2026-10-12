@@ -47,6 +47,6 @@ run on the companion device (laptop today, phone or edge board later).
 - Location is IP-based (kilometres off), so navigation is a demo until GPS
   from a phone is available. The public OSRM server only has a car profile.
 - No obstacle, traffic or hazard detection yet; sound-based detection from
-  v1.1 was removed because it was not reliable (see `experimental/`).
+  v1.1 was removed because it was not reliable (old code: tag `v1.1.0-legacy`).
 - Emergency alerts are not sent anywhere yet; the assistant says so.
 - The SQLite database (face encodings = biometric data) is not encrypted.
