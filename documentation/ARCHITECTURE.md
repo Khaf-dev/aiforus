@@ -2,28 +2,119 @@
 
 AIForUs is a voice-first assistant for blind and low-vision people. The
 long-term target is smart glasses; this repository is the software that will
-run on the companion device (laptop today, phone or edge board later).
+run on the companion device (a laptop today, a phone or edge board later).
+The glasses themselves only need a camera, a microphone and a speaker.
 
 ## Request flow
 
 ```
  microphone ──► SpeechInput ──► IntentRouter ──► Assistant ──► SpeechQueue ──► TextToSpeech ──► speaker
- (or keyboard)   (hal/stt)      (intents.py)     (assistant.py)  (speech.py)     (hal/tts)
-                                                    │
-                       ┌────────────────────────────┼──────────────────────────┐
-                       ▼                            ▼                          ▼
-                 VisionService                FaceService                 Navigator
-                 camera + YOLOv8 + EasyOCR    YuNet + SFace + SQLite      Nominatim + OSRM
-                 (services/vision.py)         (services/faces.py)         (services/navigation.py)
+ (or keyboard)   hal/stt.py     intents.py       assistant.py   speech.py      hal/piper_tts.py
+                                                     │                          hal/tts.py (pyttsx3)
+     ┌──────────────────┬──────────────────┬─────────┴─────────┬───────────────────┐
+     ▼                  ▼                  ▼                   ▼                   ▼
+ VisionService      FaceService       VisionAnswerer      Answerer            Navigator
+ camera, YOLOv8,    YuNet + SFace,    one JPEG → VLM      text → LLM          Nominatim + OSRM
+ EasyOCR            SQLite            services/llm.py     services/llm.py     services/navigation.py
+ services/vision.py services/faces.py + imaging.py
+   + spatial.py
 ```
 
-1. `SpeechInput.listen()` returns one utterance (runs in a worker thread).
-2. `IntentRouter.parse()` maps it to an `Intent` with slots (name,
-   destination, language). Deterministic rules, Indonesian and English.
-3. `Assistant.handle()` runs the handler. Handlers call services through
-   `asyncio.to_thread` so the event loop never blocks.
-4. Replies are queued on the `SpeechQueue` with a priority and spoken by the
-   TTS engine.
+1. `SpeechInput.listen()` returns one utterance (in a worker thread). While
+   the assistant is speaking it doesn't listen (half-duplex), so it never
+   transcribes its own voice.
+2. `IntentRouter.parse()` normalises the text (lowercase, no punctuation,
+   polite words stripped) and maps it to an `Intent` with slots (name,
+   destination, language, question). Deterministic rules, Indonesian and
+   English, **emergency first**.
+3. `Assistant.handle()` runs the handler. Blocking work (camera, models,
+   HTTP) runs through `asyncio.to_thread`, so the event loop never blocks.
+4. Replies go on the `SpeechQueue` with a priority and are spoken by the TTS
+   engine; anything can be interrupted.
+
+## Modules
+
+| Module | Responsibility |
+| --- | --- |
+| `cli.py` | Entry point. Builds every optional component, records why one is unavailable (shown by `--check`), wires them into the `Assistant`. |
+| `config.py` | Typed settings (pydantic, unknown keys rejected). Secrets only from env / `.env`. |
+| `intents.py` | Rule-based router. Order matters: emergency → confirmation → control → specific commands → general question. |
+| `assistant.py` | One handler per intent. All dependencies injected, so tests use fakes. |
+| `speech.py` | Priority queue in front of the TTS engine: interrupt, flush, discard, de-duplicate. |
+| `locales.py`, `i18n.py` | Every spoken sentence in `id` and `en`; a test enforces identical keys and placeholders. |
+| `storage.py` | SQLite via SQLAlchemy 2.0: face embeddings (raw float vectors) and preferences. |
+| `downloads.py` | Atomic downloads of Piper voices and face models into `models/`. |
+| `hal/` | Hardware adapters with lazy imports: camera, speech input, Piper / pyttsx3 output, IP location, Windows console. |
+| `services/vision.py` | Fresh frame capture, "can't see" checks, YOLOv8 detection, EasyOCR. |
+| `services/spatial.py` | Detection → clock direction + rough distance. |
+| `services/faces.py` | Face detection, embeddings, matching; YuNet + SFace (default) or dlib. |
+| `services/imaging.py` | Downscale + JPEG-encode a frame before it goes to a vision model. |
+| `services/llm.py` | OpenAI-compatible client: `answer()` for questions, `look()` for images; local-endpoint check. |
+| `services/navigation.py` | Geocoding, routing and spoken turn instructions. |
+
+## Two speeds of seeing
+
+| | Fast path | Detailed path |
+| --- | --- | --- |
+| Commands | "apa di depan", "benda apa saja", "baca tulisan", "siapa ini" | "jelaskan lebih detail", "baca dokumen", "lihat, …" |
+| Engine | YOLOv8n, EasyOCR, YuNet + SFace | Vision-language model (default `gemma3:4b` via Ollama) |
+| Runs | Always on this machine | Local by default; cloud only if allowed and announced |
+| Output | Structured: what, clock direction, distance | Free sentences, document text, answers |
+| Latency | Sub-second to a few seconds (CPU) | Several seconds; the first request also loads the model |
+| Future use | Basis for continuous hazard detection (Fase 2) | On-demand understanding only — never for safety |
+
+The detailed path sends **one** downscaled JPEG (`llm.image_max_side`) as a
+base64 data URL in the standard OpenAI `image_url` format, so any compatible
+server works. The system prompt tells the model to describe only what is
+visible, say when something is unclear, and never claim a path is clear or
+something is safe. Obstacle questions are never routed to it.
+
+## Where things are: clock directions and distance
+
+`services/spatial.py` turns a detection box into a `Placement`:
+
+- **Direction:** the box centre's horizontal angle from
+  `camera.horizontal_fov_deg`, rounded to a clock hour (12 = ahead).
+- **Distance:** pinhole model,
+  `distance = typical_height × focal_length_px / box_height_px`, with a
+  typical height per object class (person 1.65 m, chair 0.9 m, car 1.5 m, …).
+  Classes without a predictable height get a direction only.
+- **Cut off** by the top or bottom of the frame: the box height says
+  nothing about distance. If it fills ≥ 60 % of the frame height it is
+  *very close* (no number), otherwise it gets a direction only.
+- **People:** when a detected face lies inside the person box, the distance
+  comes from the face height (`vision.face_height_m`, 0.21 m) — if the face
+  is at least 40 px tall, or if the body gave no distance (cut off). A webcam
+  only sees a standing adult head to toe beyond ~2.5 m, so this is what
+  gives close people a number.
+- Under 1 m is spoken as *less than 1 meter*. Objects of the same kind in
+  the same direction are grouped ("2 orang di jam 12, yang terdekat …"),
+  nearest group first; the rest of the scene is summarised as a count.
+
+Accuracy is roughly ±30 %; everything is spoken with *about*. Calibration:
+[CONFIGURATION.md](CONFIGURATION.md#calibrating-distances).
+
+## Speech priorities
+
+| Priority | Used for | Behaviour |
+| --- | --- | --- |
+| `CRITICAL` | Emergency (later: hazard alerts) | Interrupts whatever is playing and drops queued chatter |
+| `HIGH` | The direct answer to the last command | Normal answer |
+| `NORMAL` | Notices (e.g. "sending the photo to the internet") | |
+| `LOW` | Acknowledgements and hints ("Sebentar…") | Discarded once the real answer is ready |
+
+## Data flows and privacy
+
+| Data | Leaves the machine? | Notes |
+| --- | --- | --- |
+| Microphone audio | Yes — Google speech recognition | Offline STT planned |
+| Camera frames | No, except the detailed path to a **cloud** VLM | Needs `llm.allow_images_to_cloud: true`; announced every time; `--check` shows "blocked" otherwise |
+| Face embeddings | No | `data/aiforus.db`, raw float64 vectors; encryption planned |
+| General questions | Only to a hosted LLM if configured | Local Ollama by default |
+| IP / destinations | Yes — ipinfo.io, Nominatim, OSRM | Nominatim gets an identifying User-Agent as its policy requires |
+
+A local endpoint is `localhost`, `*.local`, or a loopback / private /
+link-local IP address (`is_local_endpoint`).
 
 ## Key decisions
 
@@ -32,24 +123,45 @@ run on the companion device (laptop today, phone or edge board later).
 | **Rule-based intent router, LLM only for unknown questions** | Safety-relevant routing (emergency, exit) must be predictable and testable. The LLM never decides what the assistant *does*. |
 | **Emergency is matched first, on the raw utterance** | A missed emergency is far worse than a false one, and a false one only speaks guidance. |
 | **Exit requires the whole phrase plus confirmation** | The old substring router shut the app down on "is my friend here" ("friend" contains "end"). |
-| **Priority speech queue with interruption** | A future hazard alert must cut off whatever is being read. CRITICAL items also drop stale queued chatter. |
-| **Half-duplex listening** | With a real microphone the assistant would otherwise transcribe its own voice. Barge-in needs a wake word or echo cancellation (Fase 1). |
-| **Hardware abstraction layer with lazy imports** | Swap laptop webcam → glasses camera by writing one adapter. Tests and CI run without OpenCV, PyAudio, pyttsx3 or ML models. |
-| **One TTS thread owns the pyttsx3 engine** | pyttsx3 isn't thread-safe. Interruption uses the engine's `started-word` callback. |
+| **Priority speech queue with interruption** | A future hazard alert must cut off whatever is being read. |
+| **Half-duplex listening** | With a real microphone the assistant would otherwise transcribe its own voice. Barge-in needs a wake word or echo cancellation (planned). |
+| **Hardware abstraction layer with lazy imports** | Swap laptop webcam → glasses camera by writing one adapter. Tests and CI run without OpenCV, PyAudio, ML models or a GPU. |
+| **Piper as the default voice** | Natural offline Indonesian voice; Windows rarely ships one pyttsx3 can use. Audio is played in ~50 ms slices so "diam" stops it almost immediately. |
 | **"I can't see" is different from "I see nothing"** | Dark or covered frames are reported explicitly; "nothing detected" must never be mistaken for "all clear". |
-| **Typed config, secrets only from env** | Typos in `config.yaml` fail at startup; API keys never live in the repo. |
-| **Face recognition with YuNet + SFace (OpenCV DNN)** | ~40 MB of ONNX models (~10 MB int8), no C++ build, runs on Raspberry Pi/Jetson/phones — the same code path as the future edge device. Embeddings are L2-normalised so one Euclidean threshold maps to SFace's cosine threshold. dlib stays available as a desktop-only backend; embeddings of different models are stored separately. |
-| **Clock directions + rough distance** | Orientation & mobility training uses clock directions. Bearing comes from the box centre and the camera FOV; distance from the pinhole model and a typical height per class, always spoken as "about". Boxes cut off by the frame are "very close" without a number. |
-| **Two speeds of seeing** | "apa di depan" stays on fast local YOLO (directions + distance). Rich descriptions, documents and "lihat, …" questions go to a vision-language model through the same OpenAI-compatible client as the LLM — local Ollama by default, so images stay on the machine; a cloud model needs `llm.allow_images_to_cloud` and is announced every time. Obstacle questions are never routed to the VLM. |
+| **Clock directions + rough distance** | Orientation & mobility training uses clock directions. Distance is always "about" and never a safety guarantee. |
+| **Face recognition with YuNet + SFace (OpenCV DNN)** | ~40 MB of ONNX models (~10 MB int8), no C++ build, runs on Raspberry Pi / Jetson / phones — the same code path as the future edge device. Embeddings are L2-normalised so one Euclidean threshold (1.128) equals SFace's cosine threshold (0.363). dlib stays as a desktop-only backend; embeddings of different models are stored separately. |
+| **Multi-sample enrollment** | One command saves several samples from different frames; one blurry frame no longer fails enrollment and recognition is more robust. |
+| **One OpenAI-compatible client for LLM and VLM** | No vendor lock-in: local Ollama today, a hosted provider later by changing `base_url`. |
+| **Images stay local unless explicitly allowed** | Photos of a user's home, documents and people are sensitive. Cloud use is opt-in and announced every time. |
 | **Face encodings as raw float64 in SQLite** | `pickle.load` on a replaceable file can execute code. Names are case-insensitive; enrollment refuses frames with several faces. |
-| **Every sentence in `locales.py`** | Indonesian first, English kept in sync; a test enforces identical keys and placeholders. |
+| **Typed config, secrets only from env** | Typos in `config.yaml` fail at startup; API keys never live in the repo. |
+| **Every sentence in `locales.py`** | Indonesian first, English kept in sync; a test enforces it. |
+
+## Path to smart glasses
+
+The glasses become new `hal/` adapters — a camera that yields frames, a
+microphone that yields utterances, a speaker that plays text — while the
+router, assistant and services stay unchanged. Candidates (undecided):
+Mentra Live, Ray-Ban Meta with Meta's device toolkit, Brilliant Labs Frame.
+Compute stays on a phone or edge board; face models are already sized for
+it (`face.quantized: true`).
 
 ## Known limitations (tracked in the roadmap)
 
 - Speech recognition uses Google's online API; offline STT is planned.
+- No barge-in: you can't interrupt by talking while it speaks (only after).
+- No obstacle, traffic or hazard detection yet; sound-based detection from
+  v1.1 was removed because it was not reliable (old code: tag
+  `v1.1.0-legacy`).
+- Distances are rough (lying objects, people facing away); depth estimation
+  is planned. `vision.face_height_m` is not yet calibrated against real
+  measurements.
+- Vision-language models can hallucinate (wrong numbers, invented text).
+  Answers about money or medicine must be double-checked.
+- With the default PyTorch install (CPU-only on Windows) YOLO and EasyOCR
+  run on the CPU; using the GPU (CUDA build of PyTorch, VRAM shared with
+  Ollama) is planned.
 - Location is IP-based (kilometres off), so navigation is a demo until GPS
   from a phone is available. The public OSRM server only has a car profile.
-- No obstacle, traffic or hazard detection yet; sound-based detection from
-  v1.1 was removed because it was not reliable (old code: tag `v1.1.0-legacy`).
 - Emergency alerts are not sent anywhere yet; the assistant says so.
 - The SQLite database (face encodings = biometric data) is not encrypted.

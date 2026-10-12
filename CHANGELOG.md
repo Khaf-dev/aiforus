@@ -38,6 +38,8 @@ All notable changes to this project are documented here. The format follows
   `--download-voices` still works as an alias.
 - `speech.engine` setting: `auto` (Piper if available, else pyttsx3),
   `piper` or `pyttsx3`. `--check` shows which engine and voices are in use.
+- Documentation: `documentation/CONFIGURATION.md` (every setting, LLM/VLM
+  providers, distance calibration) and `documentation/TROUBLESHOOTING.md`.
 
 ### Changed
 - General questions work with any OpenAI-compatible LLM: `llm.base_url`
@@ -53,6 +55,10 @@ All notable changes to this project are documented here. The format follows
   (SFace 1.128 ≈ cosine 0.363; dlib 0.55).
 - The `vision` extra pins `opencv-python<5`: the YuNet/SFace models in use
   are the OpenCV 4.x DNN versions.
+- README, ARCHITECTURE and VOICE_COMMANDS rewritten for the current feature
+  set (VLM, face-based distance, data flows, project layout, example
+  dialogue). `requirements.txt` installs the recommended extras instead of
+  `all`, so it no longer tries to build dlib.
 
 ### Fixed
 - Console no longer shows comtypes cache logs and harmless torch warnings

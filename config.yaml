@@ -2,6 +2,7 @@
 # Secrets such as LLM_API_KEY go in the environment or a .env file.
 # Unknown keys are rejected at startup, so typos fail loudly.
 # Every key is optional; the defaults live in aiforus/config.py.
+# Reference for every key: documentation/CONFIGURATION.md
 
 app:
   name: "AIForUs Vision Assistant"
@@ -23,7 +24,7 @@ speech:
     en: "en-US"
   # Voice engine: auto (Piper if installed and downloaded, else pyttsx3) | piper | pyttsx3
   engine: "auto"
-  # Piper voices per language; download with: python -m aiforus --download-voices
+  # Piper voices per language; download with: python -m aiforus --download-models
   piper_voices:
     id: "id_ID-news_tts-medium"
     en: "en_US-lessac-medium"
