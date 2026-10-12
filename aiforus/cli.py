@@ -114,7 +114,6 @@ def build_components(settings: Settings, args: argparse.Namespace, language: str
     from .hal.stt import GoogleSpeechInput, KeyboardInput
     from .hal.tts import PrintTTS
     from .services.faces import DlibFaceEncoder, OpenCVFaceEncoder
-    from .services.llm import OpenAIAnswerer
     from .services.navigation import Navigator
     from .services.vision import EasyOcrReader, YoloDetector
 
@@ -168,20 +167,55 @@ def build_components(settings: Settings, args: argparse.Namespace, language: str
         )
     else:
         c.status["navigation"] = "disabled in config"
-    if s.llm.enabled and s.openai_api_key is not None:
-        key = s.openai_api_key.get_secret_value()
-        c.answerer = _try(
-            c,
-            "general questions (LLM)",
-            lambda: OpenAIAnswerer(
-                api_key=key, model=s.llm.model, timeout_s=s.llm.timeout_s, max_tokens=s.llm.max_tokens
-            ),
-        )
-    else:
-        c.status["general questions (LLM)"] = (
-            "off - set OPENAI_API_KEY to enable" if s.llm.enabled else "disabled"
-        )
+    c.answerer = _build_answerer(c, s)
     return c
+
+
+_LLM = "general questions (LLM)"
+
+
+def _build_answerer(c: Components, s: Settings) -> Any:
+    from .services.llm import OpenAIAnswerer
+
+    if not s.llm.enabled:
+        c.status[_LLM] = "disabled in config"
+        return None
+    if s.llm.base_url is None and s.llm_api_key is None:
+        c.status[_LLM] = "off - set llm.base_url (e.g. Ollama) or LLM_API_KEY"
+        return None
+    # Local servers such as Ollama ignore the key, but the client requires one.
+    key = s.llm_api_key.get_secret_value() if s.llm_api_key is not None else "not-needed"
+    answerer = _try(
+        c,
+        _LLM,
+        lambda: OpenAIAnswerer(
+            api_key=key,
+            base_url=s.llm.base_url,
+            model=s.llm.model,
+            timeout_s=s.llm.timeout_s,
+            max_tokens=s.llm.max_tokens,
+        ),
+    )
+    if answerer is not None:
+        c.status[_LLM] = f"ok - {s.llm.model} @ {s.llm.base_url or 'api.openai.com'}"
+    return answerer
+
+
+def _probe_llm(s: Settings) -> str | None:
+    """For local/self-hosted endpoints: is the server actually running?"""
+    if not s.llm.enabled or s.llm.base_url is None:
+        return None
+    import requests
+
+    try:
+        response = requests.get(s.llm.base_url.rstrip("/") + "/models", timeout=3)
+        response.raise_for_status()
+        models = [m.get("id") for m in response.json().get("data", [])]
+    except Exception as exc:
+        return f"NOT reachable ({type(exc).__name__}) - is the server running?"
+    if s.llm.model not in models:
+        return f"reachable, but model {s.llm.model!r} not found (have: {', '.join(models) or 'none'})"
+    return "reachable, model found"
 
 
 def _close_quietly(*resources: Any) -> None:
@@ -255,6 +289,9 @@ def run_check(settings: Settings, args: argparse.Namespace) -> int:
     if components.camera is not None:
         frame = components.camera.capture()
         print(f"  {'camera frame':<26} {'ok ' + str(frame.shape) if frame is not None else 'no frame'}")
+    probe = _probe_llm(settings)
+    if probe is not None:
+        print(f"  {'LLM server':<26} {probe}")
     _close_quietly(components.camera, components.tts, components.listener)
     return 0
 

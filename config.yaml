@@ -1,5 +1,5 @@
 # AIForUs configuration (non-secret settings only).
-# Secrets such as OPENAI_API_KEY go in the environment or a .env file.
+# Secrets such as LLM_API_KEY go in the environment or a .env file.
 # Unknown keys are rejected at startup, so typos fail loudly.
 # Every key is optional; the defaults live in aiforus/config.py.
 
@@ -73,9 +73,13 @@ navigation:
   walking_speed_mps: 1.2
 
 llm:
-  enabled: true           # needs OPENAI_API_KEY; used only for general questions
+  enabled: true           # used only for general questions, never for commands
+  # Any OpenAI-compatible endpoint. Empty = OpenAI (needs LLM_API_KEY / OPENAI_API_KEY).
+  # Free, local and offline with Ollama: base_url "http://localhost:11434/v1" and
+  # model = a model you pulled with `ollama pull <name>`.
+  base_url:
   model: "gpt-4o-mini"
-  timeout_s: 15
+  timeout_s: 30           # local models on a CPU can be slow
   max_tokens: 200
 
 emergency:

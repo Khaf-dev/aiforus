@@ -132,8 +132,12 @@ class NavigationSettings(_Section):
 
 class LLMSettings(_Section):
     enabled: bool = True
+    # Any OpenAI-compatible chat endpoint. Empty = OpenAI itself.
+    # Local and free, works offline: Ollama -> "http://localhost:11434/v1"
+    base_url: str | None = None
     model: str = "gpt-4o-mini"
-    timeout_s: float = Field(15.0, gt=0)
+    # Local models on a CPU can take a while to answer.
+    timeout_s: float = Field(30.0, gt=0)
     max_tokens: int = Field(200, ge=16)
 
 
@@ -155,7 +159,8 @@ class Settings(_Section):
     emergency: EmergencySettings = Field(default_factory=EmergencySettings)
 
     # Secrets never come from config.yaml.
-    openai_api_key: SecretStr | None = Field(default=None, exclude=True)
+    # From LLM_API_KEY (any provider) or OPENAI_API_KEY.
+    llm_api_key: SecretStr | None = Field(default=None, exclude=True)
 
     @property
     def data_dir(self) -> Path:
@@ -224,7 +229,7 @@ def load_settings(
         data = _deep_merge(data, overrides)
 
     settings = Settings.model_validate(data)
-    api_key = environ.get("OPENAI_API_KEY", "").strip()
+    api_key = (environ.get("LLM_API_KEY") or environ.get("OPENAI_API_KEY") or "").strip()
     if api_key:
-        settings.openai_api_key = SecretStr(api_key)
+        settings.llm_api_key = SecretStr(api_key)
     return settings

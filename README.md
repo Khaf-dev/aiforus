@@ -27,7 +27,7 @@ Today it runs on a laptop with a webcam and headphones.
 | Read text | ✅ | EasyOCR (Indonesian + English), reading order |
 | Recognise people | ✅ | Enroll by voice; YuNet + SFace (small ONNX models that also run on edge devices), stored locally |
 | Walking directions | ⚠️ demo | Nominatim + OSRM, turn-by-turn; start point from IP (km off) |
-| General questions | ✅ optional | LLM, only if `OPENAI_API_KEY` is set |
+| General questions | ✅ optional | Any OpenAI-compatible LLM: local & free with Ollama, or a hosted provider |
 | Emergency | ⚠️ partial | Immediate spoken guidance + location; does **not** send alerts yet |
 | Obstacles, traffic, hazards, sound events | ❌ planned | See roadmap |
 
@@ -47,9 +47,8 @@ pip install -e ".[voice,piper,vision]"
 # Natural offline voices for Indonesian and English (~60 MB each)
 # Piper voices (id + en, ~60 MB each) and face models (~40 MB)
 python -m aiforus --download-models
-# Optional: answers to general questions
+# Optional: answers to general questions (see "General questions" below)
 pip install -e ".[llm]"
-copy .env.example .env   # then put your OPENAI_API_KEY in .env
 ```
 
 Check what works on your machine:
@@ -86,7 +85,7 @@ Say **"bantuan"** to hear the commands. Full list:
 | Your voice | Sent to Google's speech recognition service (needs internet). Offline recognition is planned. |
 | Camera images | Processed locally; never stored or uploaded. |
 | Face encodings | Stored locally in `data/aiforus.db`. Not encrypted yet — keep that folder private. Ask people before enrolling their face. |
-| General questions | Sent to OpenAI only if you set `OPENAI_API_KEY`. |
+| General questions | Stay on your machine with a local LLM (Ollama); sent to the provider only if you configure a hosted one. |
 | Location | Your IP is sent to ipinfo.io; destination searches go to OpenStreetMap Nominatim and OSRM. |
 
 ## Architecture
@@ -106,7 +105,21 @@ and known limitations: [documentation/ARCHITECTURE.md](documentation/ARCHITECTUR
 
 Non-secret settings live in [`config.yaml`](config.yaml) (camera index, TTS
 speed, confidence thresholds, ...). Unknown keys are rejected at startup.
-Secrets (`OPENAI_API_KEY`) come from the environment or `.env`.
+Secrets (`LLM_API_KEY`) come from the environment or `.env`.
+
+### General questions (LLM)
+
+Anything that isn't a command is answered by an LLM through the
+OpenAI-compatible API, so you can choose where it runs:
+
+- **Local, free, offline — [Ollama](https://ollama.com):** install it,
+  `ollama pull <model>` (a small multilingual model that speaks Indonesian,
+  e.g. from the Qwen or Gemma families), then in `config.yaml` set
+  `llm.base_url: "http://localhost:11434/v1"` and `llm.model: "<model>"`.
+  `python -m aiforus --check` tells you whether the server and model are
+  reachable.
+- **Hosted:** leave `base_url` empty for OpenAI, or set it to another
+  OpenAI-compatible provider, and put the key in `.env` as `LLM_API_KEY`.
 
 ## Development
 

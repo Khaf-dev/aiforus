@@ -31,6 +31,11 @@ All notable changes to this project are documented here. The format follows
   `piper` or `pyttsx3`. `--check` shows which engine and voices are in use.
 
 ### Changed
+- General questions work with any OpenAI-compatible LLM: `llm.base_url`
+  (e.g. Ollama at `http://localhost:11434/v1`, local and free) and
+  `LLM_API_KEY` (any provider; `OPENAI_API_KEY` still accepted). No key is
+  needed for local servers. `--check` probes the server and model.
+  `llm.timeout_s` default raised to 30 s for CPU-only local models.
 - Face enrollment keeps grabbing frames for up to `face.enroll_timeout_s`
   (default 4 s) and saves `face.enroll_samples` (default 3) samples from
   different frames in one command. A single blurry or empty frame no longer

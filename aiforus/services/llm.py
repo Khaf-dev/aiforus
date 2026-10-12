@@ -30,12 +30,29 @@ class Answerer(Protocol):
 
 
 class OpenAIAnswerer:
-    def __init__(self, *, api_key: str, model: str, timeout_s: float, max_tokens: int) -> None:
+    """Chat completions from any OpenAI-compatible server.
+
+    That covers OpenAI itself and, through ``base_url``, local servers such
+    as Ollama or llama.cpp as well as other hosted providers that expose the
+    same API — so the assistant isn't locked to one vendor.
+    """
+
+    def __init__(
+        self,
+        *,
+        api_key: str,
+        model: str,
+        timeout_s: float,
+        max_tokens: int,
+        base_url: str | None = None,
+    ) -> None:
         try:
             import openai
         except ImportError as exc:
             raise ComponentUnavailable("openai is not installed (pip install -e .[llm])") from exc
-        self._client: Any = openai.AsyncOpenAI(api_key=api_key, timeout=timeout_s, max_retries=1)
+        self._client: Any = openai.AsyncOpenAI(
+            api_key=api_key, base_url=base_url, timeout=timeout_s, max_retries=1
+        )
         self._model = model
         self._max_tokens = max_tokens
 
