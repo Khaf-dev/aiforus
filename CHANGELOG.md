@@ -1,9 +1,56 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+All notable changes to this project are documented here. The format follows
+[Keep a Changelog](https://keepachangelog.com/).
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/),
-and this project adheres to [Semantic Versioning](https://semver.org/).
+## [0.2.0] — Fase 0: foundation
+
+A rewrite of the application core. The version goes *down* from 1.1.0 on
+purpose: 1.1.0 advertised features that did not work, and this release is an
+honest pre-1.0 research prototype.
+
+### Safety
+- Emergency is matched first and always wins. A bare "tolong" / "help me" is
+  now an emergency (it used to open the help menu).
+- Emergency no longer says "help is on the way": it says alerts can't be
+  sent yet, tells the user to call 112 and gives the approximate location.
+- Exiting needs the whole phrase and a spoken confirmation. Substring
+  matching used to quit on "is my friend here" ("friend" contains "end").
+- Dark, covered or missing cameras are reported as "I can't see", never as
+  "nothing in front of you".
+- Sound localization and echo obstacle detection were removed (they returned
+  arbitrary directions and a constant 1.37 m obstacle). The module is kept,
+  unwired, in `experimental/` with an explanation.
+- Navigation always reminds the user that obstacles aren't detected and
+  that IP-based location is approximate.
+
+### Added
+- `aiforus` package: typed config, i18n catalog (id/en), deterministic intent
+  router, prioritised interruptible speech queue, hardware abstraction layer,
+  services for vision, faces, navigation and LLM answers.
+- `python -m aiforus` CLI with `--text`, `--mute`, `--lang`, `--check`.
+- Turn-by-turn instructions from OSRM maneuvers, in Indonesian and English.
+- Indonesian names for all 80 detectable object classes.
+- pytest suite (no hardware needed), ruff, CI on Python 3.10–3.13.
+
+### Changed
+- Languages: Indonesian (default) and English. The other six languages of
+  1.1.0 only changed the speech-recognition locale; all replies were English.
+- Face data moved from a pickle file to SQLite (`data/aiforus.db`), stored as
+  raw float vectors. Enrollment refuses frames with more than one face.
+- Packaging moved to `pyproject.toml` with optional extras.
+- The LLM is only used for general questions, never for command routing.
+
+### Removed
+- `ai_modules/`, `features/`, `database/`, `api_integration/`, `utils/`,
+  `deploy.py`, `setup.py`, hardware-dependent test scripts and the unused
+  conversation/scene logging tables (no transcripts are stored).
+- Dependencies no longer needed: transformers, langchain, fastapi, alembic,
+  geopy, geocoder, gTTS.
+
+### Migration
+- Faces enrolled with 1.1.0 (`database/face_encodings.pkl`) are not imported;
+  enroll them again. The old `vision_assistant.db` is no longer used.
 
 ## [1.1.0] - 2026-02-11
 
