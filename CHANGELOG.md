@@ -27,6 +27,10 @@ All notable changes to this project are documented here. The format follows
   `piper` or `pyttsx3`. `--check` shows which engine and voices are in use.
 
 ### Changed
+- Face enrollment keeps grabbing frames for up to `face.enroll_timeout_s`
+  (default 4 s) and saves `face.enroll_samples` (default 3) samples from
+  different frames in one command. A single blurry or empty frame no longer
+  fails enrollment, and several samples make recognition more robust.
 - `face.match_threshold` now defaults to the backend's recommended value
   (SFace 1.128 ≈ cosine 0.363; dlib 0.55).
 - The `vision` extra pins `opencv-python<5`: the YuNet/SFace models in use

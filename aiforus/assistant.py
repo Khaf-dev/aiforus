@@ -73,7 +73,8 @@ _VISION_PROBLEMS = {
 class Assistant:
     STT_WARNING_INTERVAL_S = 60.0
     LOCATION_TIMEOUT_S = 5.0
-    ENROLL_SETTLE_S = 1.0  # pause between "hold still" and taking the photo
+    ENROLL_SETTLE_S = 1.0  # pause between "hold still" and taking the photos
+    ENROLL_FRAME_INTERVAL_S = 0.25  # gap between enrollment frames
 
     def __init__(
         self,
@@ -371,14 +372,19 @@ class Assistant:
         if not name:
             self.say("enroll_need_name")
             return
-        # Let the user hear the instruction before the photo is taken.
+        # Let the user hear the instruction before the photos are taken.
         await self.speech.say_and_wait(self.tr.t("enroll_look", name=name), Priority.HIGH)
         await asyncio.sleep(self.ENROLL_SETTLE_S)
-        status, frame = await self.vision.capture()
-        if frame is None:
-            self._vision_problem(status)
+        encodings, problem = await self._collect_face_samples()
+        if not encodings:
+            if isinstance(problem, VisionStatus):
+                self._vision_problem(problem)
+            elif problem is EnrollStatus.MULTIPLE_FACES:
+                self.say("enroll_multiple", name=name)
+            else:
+                self.say("enroll_no_face")
             return
-        result = await asyncio.to_thread(self.faces.enroll, name, frame)
+        result = await asyncio.to_thread(self.faces.add_samples, name, encodings)
         if result.status is EnrollStatus.OK:
             self.say("enroll_ok", name=result.name, count=result.samples)
         elif result.status is EnrollStatus.MULTIPLE_FACES:
@@ -389,6 +395,31 @@ class Assistant:
             self.say("enroll_need_name")
         else:
             self.say("enroll_no_face")
+
+    async def _collect_face_samples(self) -> tuple[list, VisionStatus | EnrollStatus | None]:
+        """Grab frames until ``enroll_samples`` single-face encodings are found
+        or ``enroll_timeout_s`` passes. Returns the encodings and, when none
+        were found, the last problem seen (camera status or face status)."""
+        assert self.faces is not None and self.vision is not None
+        wanted = self.settings.face.enroll_samples
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + self.settings.face.enroll_timeout_s
+        encodings: list = []
+        problem: VisionStatus | EnrollStatus | None = None
+        while len(encodings) < wanted and loop.time() < deadline:
+            status, frame = await self.vision.capture()
+            if frame is None:
+                problem = status
+                if status in (VisionStatus.UNAVAILABLE, VisionStatus.NO_CAMERA):
+                    break  # retrying won't help
+            else:
+                face_status, encoding = await asyncio.to_thread(self.faces.single_face, frame)
+                if encoding is not None:
+                    encodings.append(encoding)
+                else:
+                    problem = face_status
+            await asyncio.sleep(self.ENROLL_FRAME_INTERVAL_S)
+        return encodings, problem
 
     async def _forget_face(self, intent: Intent) -> None:
         if self.faces is None:

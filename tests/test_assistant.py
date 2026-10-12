@@ -64,8 +64,13 @@ class StubReader:
 class StubEncoder:
     def __init__(self):
         self.next = []
+        self.script = None  # optional list of per-call results
+        self.calls = 0
 
     def encode(self, frame):
+        self.calls += 1
+        if self.script:
+            return list(self.script.pop(0))
         return list(self.next)
 
 
@@ -134,7 +139,7 @@ class Harness:
             translator=Translator(language),
             vision=vision,
             faces=FaceService(
-                self.encoder, SqlFaceStore(self.db), match_threshold=0.5, max_samples_per_person=3
+                self.encoder, SqlFaceStore(self.db), match_threshold=0.5, max_samples_per_person=10
             )
             if faces
             else None,
@@ -145,6 +150,8 @@ class Harness:
             on_language_change=self.language_changes.append,
         )
         self.assistant.ENROLL_SETTLE_S = 0
+        self.assistant.ENROLL_FRAME_INTERVAL_S = 0
+        self.settings.face.enroll_timeout_s = 0.3
 
     async def __aenter__(self):
         self.speech.start()
@@ -330,7 +337,7 @@ async def test_enroll_recognize_list_forget(tmp_path):
         h.encoder.next = [v(1)]
         spoken = await h.say("kenali wajah sebagai budi")
         assert "Pastikan Budi setuju" in spoken[0]
-        assert spoken[-1] == "Wajah Budi tersimpan. Sekarang ada 1 sampel."
+        assert spoken[-1] == "Wajah Budi tersimpan. Sekarang ada 3 sampel."
 
         h.encoder.next = [v(1.1), v(9)]
         spoken = await h.say("siapa ini")
@@ -348,6 +355,41 @@ async def test_enroll_needs_name_and_single_face(tmp_path):
         h.encoder.next = [v(1), v(2)]
         spoken = await h.say("kenali wajah sebagai siti")
         assert spoken[-1] == "Aku melihat lebih dari satu wajah. Pastikan hanya Siti yang terlihat."
+
+
+async def test_enroll_keeps_trying_until_a_single_face_is_seen(tmp_path):
+    async with Harness(tmp_path) as h:
+        h.encoder.script = [[], [v(1), v(2)], [v(1)], [], [v(1.01)], [v(1.02)]]
+        spoken = await h.say("kenali wajah sebagai siti")
+        assert spoken[-1] == "Wajah Siti tersimpan. Sekarang ada 3 sampel."
+        assert h.encoder.calls == 6
+
+
+async def test_enroll_saves_what_it_found_before_timeout(tmp_path):
+    async with Harness(tmp_path) as h:
+        h.encoder.script = [[v(1)]]  # then no faces at all
+        spoken = await h.say("kenali wajah sebagai siti")
+        assert spoken[-1] == "Wajah Siti tersimpan. Sekarang ada 1 sampel."
+
+
+async def test_enroll_respects_the_sample_limit(tmp_path):
+    async with Harness(tmp_path) as h:
+        h.encoder.next = [v(1)]
+        await h.say("kenali wajah sebagai budi")  # 3
+        await h.say("kenali wajah sebagai budi")  # 6
+        await h.say("kenali wajah sebagai budi")  # 9
+        assert (await h.say("kenali wajah sebagai budi"))[
+            -1
+        ] == "Wajah Budi tersimpan. Sekarang ada 10 sampel."
+        spoken = await h.say("kenali wajah sebagai budi")
+        assert spoken[-1] == "Sampel wajah Budi sudah penuh, maksimal 10 sampel."
+
+
+async def test_enroll_stops_immediately_without_camera(tmp_path):
+    async with Harness(tmp_path, frames=[]) as h:
+        h.settings.face.enroll_timeout_s = 5
+        spoken = await asyncio.wait_for(h.say("kenali wajah sebagai siti"), 2)
+        assert spoken[-1] == "Kamera tidak tersedia. Aku tidak bisa melihat sekarang."
 
 
 async def test_faces_unavailable(tmp_path):

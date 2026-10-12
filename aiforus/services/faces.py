@@ -186,23 +186,48 @@ class FaceService:
         self._threshold = match_threshold
         self._max_samples = max_samples_per_person
 
+    def single_face(self, frame: np.ndarray) -> tuple[EnrollStatus, np.ndarray | None]:
+        """The encoding of the only face in ``frame``.
+
+        Several faces are refused rather than guessed: saving the wrong
+        person's face would make every later recognition of them wrong.
+        """
+        encodings = self._encoder.encode(frame)
+        if not encodings:
+            return EnrollStatus.NO_FACE, None
+        if len(encodings) > 1:
+            return EnrollStatus.MULTIPLE_FACES, None
+        return EnrollStatus.OK, encodings[0]
+
+    def add_samples(self, raw_name: str, encodings: list[np.ndarray]) -> EnrollResult:
+        """Store encodings for one person, up to ``max_samples_per_person``."""
+        name = normalize_name(raw_name)
+        if not name:
+            return EnrollResult(EnrollStatus.INVALID_NAME, name)
+        existing = self._store.count(name)
+        room = self._max_samples - existing
+        if room <= 0:
+            return EnrollResult(EnrollStatus.FULL, name, existing)
+        if not encodings:
+            return EnrollResult(EnrollStatus.NO_FACE, name, existing)
+        samples = existing
+        for encoding in encodings[:room]:
+            samples = self._store.add(name, encoding)
+        logger.info("Enrolled %d face sample(s) for %s (%d total)", samples - existing, name, samples)
+        return EnrollResult(EnrollStatus.OK, name, samples)
+
     def enroll(self, raw_name: str, frame: np.ndarray) -> EnrollResult:
+        """Enroll from a single frame (kept for simple callers and tests)."""
         name = normalize_name(raw_name)
         if not name:
             return EnrollResult(EnrollStatus.INVALID_NAME, name)
         existing = self._store.count(name)
         if existing >= self._max_samples:
             return EnrollResult(EnrollStatus.FULL, name, existing)
-        encodings = self._encoder.encode(frame)
-        if not encodings:
-            return EnrollResult(EnrollStatus.NO_FACE, name, existing)
-        if len(encodings) > 1:
-            # Saving the wrong person's face would make every later
-            # recognition of them wrong, so refuse instead of guessing.
-            return EnrollResult(EnrollStatus.MULTIPLE_FACES, name, existing)
-        samples = self._store.add(name, encodings[0])
-        logger.info("Enrolled a face sample for %s (%d total)", name, samples)
-        return EnrollResult(EnrollStatus.OK, name, samples)
+        status, encoding = self.single_face(frame)
+        if encoding is None:
+            return EnrollResult(status, name, existing)
+        return self.add_samples(name, [encoding])
 
     def identify(self, frame: np.ndarray) -> list[FaceMatch]:
         encodings = self._encoder.encode(frame)

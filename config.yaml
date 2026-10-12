@@ -59,6 +59,8 @@ face:
   detection_model: "hog"  # dlib only: hog (fast, CPU) | cnn (accurate, needs GPU)
   # match_threshold: 1.128  # max embedding distance; empty = backend default (lower = stricter)
   max_samples_per_person: 10
+  enroll_samples: 3       # samples saved per "kenali wajah" command (from different frames)
+  enroll_timeout_s: 4     # how long enrollment keeps trying to see exactly one face
 
 navigation:
   enabled: true

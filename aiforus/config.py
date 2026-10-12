@@ -106,6 +106,10 @@ class FaceSettings(_Section):
     # i.e. cosine similarity >= 0.363; dlib 0.55). Lower is stricter.
     match_threshold: float | None = Field(None, gt=0.0, le=2.0)
     max_samples_per_person: int = Field(10, ge=1, le=100)
+    # One "kenali wajah" command collects this many samples from different
+    # frames (angles/lighting vary slightly), trying for up to the timeout.
+    enroll_samples: int = Field(3, ge=1, le=10)
+    enroll_timeout_s: float = Field(4.0, gt=0.0, le=20.0)
 
 
 class NavigationSettings(_Section):

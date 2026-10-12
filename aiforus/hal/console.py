@@ -39,6 +39,7 @@ def quick_edit_disabled() -> Iterator[None]:
         mode = ctypes.c_uint32()
         if kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
             original = mode.value
+            # matikan bit QuickEdit (0x40); EXTENDED_FLAGS (0x80) wajib ikut di set
             new_mode = (original & ~_ENABLE_QUICK_EDIT_MODE) | _ENABLE_EXTENDED_FLAGS
             kernel32.SetConsoleMode(handle, new_mode)
     except Exception:  # not a real console (IDE, redirected input, ...)
