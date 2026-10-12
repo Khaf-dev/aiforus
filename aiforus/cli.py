@@ -8,6 +8,7 @@ import contextlib
 import logging
 import platform
 import sys
+import warnings
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -243,6 +244,20 @@ async def run_assistant(settings: Settings, args: argparse.Namespace) -> int:
     return 0
 
 
+def _quiet_third_party_noise() -> None:
+    """Hide chatter from dependencies that isn't actionable for the user.
+
+    Shown again with ``--debug``.
+    """
+    logging.getLogger("comtypes").setLevel(logging.WARNING)
+    # Emitted by torch when EasyOCR loads its quantized model, and when its
+    # DataLoader runs without a GPU. Neither affects results.
+    warnings.filterwarnings("ignore", message=r".*quantize_per_(tensor|channel).*", category=UserWarning)
+    warnings.filterwarnings(
+        "ignore", message=r".*'pin_memory' argument is set as true.*", category=UserWarning
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     logging.basicConfig(
@@ -257,6 +272,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     if not args.debug:
         logging.getLogger().setLevel(settings.app.log_level)
+        _quiet_third_party_noise()
 
     if args.check:
         # The report already lists every problem; skip the duplicate warnings.
