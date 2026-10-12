@@ -18,6 +18,7 @@ from . import __version__
 from .assistant import Assistant
 from .config import PROJECT_ROOT, SUPPORTED_LANGUAGES, Settings, load_settings
 from .hal import ComponentUnavailable
+from .hal.console import quick_edit_disabled
 from .hal.location import IpLocationProvider
 from .i18n import Translator
 from .speech import SpeechQueue
@@ -359,6 +360,7 @@ def main(argv: list[str] | None = None) -> int:
         logging.getLogger().setLevel(logging.ERROR)
         return run_check(settings, args)
     try:
-        return asyncio.run(run_assistant(settings, args))
+        with quick_edit_disabled():
+            return asyncio.run(run_assistant(settings, args))
     except KeyboardInterrupt:
         return 0

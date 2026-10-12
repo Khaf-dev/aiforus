@@ -36,6 +36,9 @@ All notable changes to this project are documented here. The format follows
 - Console no longer shows comtypes cache logs and harmless torch warnings
   (still visible with `--debug`).
 - English "1 meters" → "1 meter".
+- Windows: the assistant no longer freezes until Enter is pressed after a
+  click in the console window (QuickEdit mode is disabled while it runs and
+  restored on exit).
 
 ## [0.2.0] — Fase 0: foundation
 
