@@ -86,6 +86,12 @@ All notable changes to this project are documented here. The format follows
 - The "sending the photo to the internet" notice could be spoken after the
   answer; it is now always before it.
 - English: "I see 1 faces" → "I see one face".
+- "ada berapa orang" / "how many people" counts with the camera instead of
+  going to the LLM (as the whole question only).
+- The LLM no longer announces the date or adds "may be out of date" to
+  answers that don't need it.
+- The vision model only uses clock positions 9 to 3 (it had said "jam 6",
+  which is behind the user) and is told the user is not in the photo.
 - A flaky speech-queue test (race in the fake TTS and in the test itself).
 - Console no longer shows comtypes cache logs and harmless torch warnings
   (still visible with `--debug`).

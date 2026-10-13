@@ -46,6 +46,11 @@ T = IntentType
         ("siapa orang ini", T.RECOGNIZE_FACES),
         ("orang itu siapa", T.RECOGNIZE_FACES),
         ("ini siapa yang bikin lagunya", T.GENERAL_QUESTION),
+        # Second Windows test: counting people went to the LLM.
+        ("ada berapa orang", T.DETECT_OBJECTS),
+        ("berapa orang di depan saya", T.DETECT_OBJECTS),
+        ("how many people are in front of me", T.DETECT_OBJECTS),
+        ("berapa orang yang tinggal di jakarta", T.GENERAL_QUESTION),
         ("who's there?", T.RECOGNIZE_FACES),
         ("siapa saja yang kamu kenal", T.LIST_FACES),
         ("who do you know", T.LIST_FACES),

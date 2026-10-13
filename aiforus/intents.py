@@ -212,6 +212,12 @@ _RULES: list[tuple[IntentType, re.Pattern[str]]] = [
         _rx(
             r"\b(?:benda apa|ada benda|deteksi (?:benda|objek)|objek apa|barang apa"
             r"|what objects|detect objects|identify objects|what things)\b"
+            # "ada berapa orang?" - only as the whole question, so "berapa orang
+            # yang tinggal di Jakarta?" stays a general question.
+            r"|^(?:ada )?berapa (?:orang|benda|banyak orang)"
+            r"(?: (?:di (?:depan|sekitar|sini)(?: saya| aku| ku)?|yang ada(?: di depan)?))?$"
+            r"|^how many (?:people|persons|objects|things)(?: are)?"
+            r"(?: (?:here|there|in front(?: of me)?|around(?: me)?))?$"
         ),
     ),
     (

@@ -48,6 +48,7 @@ logs.
 | The first "apa di depan" / "baca tulisan" is slow | YOLO and EasyOCR load (and on first use download) their models. Later requests are faster. |
 | Objects missed or wrong | Raise or lower `vision.detection_confidence`; a larger model (`yolov8s.pt`) is more accurate but slower. |
 | Distances consistently too large / small | [Calibrate](CONFIGURATION.md#calibrating-distances) `camera.horizontal_fov_deg` and `vision.face_height_m`. Expect roughly ±30 % anyway. |
+| Directions look mirrored, or it describes *you* | A laptop webcam faces you, so "jam 1" is to the camera's right (your left) and you are the person in front. Smart glasses look where the user looks. For realistic tests point a camera forward: a USB webcam, or a phone used as a webcam. |
 | You want to see what the assistant "sees" | Run with `--preview`: live boxes with labels, and the exact photo behind each answer. |
 | A close person is *"sangat dekat"* with no number | Their body is cut off and no face is visible (facing away, too close). Expected; depth estimation is planned. |
 

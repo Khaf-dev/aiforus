@@ -182,9 +182,13 @@ async def test_answer_knows_today_and_hedges_on_changing_facts(fake_openai):
     )
     await answerer.answer("siapa presiden indonesia", "id")
     system = fake_openai.instances[0].requests[0]["messages"][0]["content"]
-    assert "Today is Tuesday, 13 October 2026." in system
+    assert "Today is Tuesday, 13 October 2026 " in system
     assert "may be out of date" in system
     assert "do not ask follow-up questions" in system
+    # Second Windows test: it announced the date and "may be out of date" on
+    # an unrelated question.
+    assert "mention it only when asked" in system
+    assert "do not add that warning to other answers" in system
 
 
 @pytest.mark.parametrize(
@@ -201,6 +205,9 @@ async def test_vision_prompt_uses_clock_wording_of_the_reply_language(fake_opena
     assert phrase in system["content"]
     assert absent not in system["content"]
     assert "clock positions" in user["content"][0]["text"]
+    # It said "jam 6" (behind the user) and took the person in front for the user.
+    assert ("jam 4 sampai 8" if language == "id" else "4 to 8 are behind") in system["content"]
+    assert "the user is not in it" in system["content"]
 
 
 def test_vision_model_defaults_to_chat_model(fake_openai):

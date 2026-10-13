@@ -32,7 +32,7 @@ time. Anything that doesn't match a command is a
 | What | Bahasa Indonesia | English |
 | --- | --- | --- |
 | Describe the scene | "apa di depan", "ada apa di sekitar", "gambarkan", "lihat sekitar" | "what's in front of me", "describe" |
-| Objects only | "benda apa saja", "deteksi benda" | "what objects", "detect objects" |
+| Objects only, or counting | "benda apa saja", "deteksi benda", "ada berapa orang" | "what objects", "how many people" |
 | Read short text | "baca tulisan", "bacakan", "apa tulisannya" | "read text", "what does it say" |
 
 The answer uses **clock directions** (12 = straight ahead, 3 = right,
