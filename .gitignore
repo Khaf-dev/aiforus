@@ -150,3 +150,6 @@ site/
 *.key
 secrets/
 credentials/
+
+# The wake word training notebook is generated and versioned (tools/wakeword/make_notebook.py)
+!tools/wakeword/train_nemo.ipynb
