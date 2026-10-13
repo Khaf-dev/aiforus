@@ -123,6 +123,23 @@ def focal_length_px(width: int, height: int, horizontal_fov_deg: float) -> float
 # Below this face height (pixels) the face is too small to measure reliably,
 # so the body height is used instead (~5 m away on a 720p, 70 deg webcam).
 MIN_FACE_PX = 40.0
+# A face smaller than this gets a direction but no distance (~15 m away).
+_TINY_FACE_PX = 12.0
+
+
+def face_position(
+    box: tuple[float, float, float, float],
+    width: int,
+    height: int,
+    horizontal_fov_deg: float,
+    face_height_m: float,
+) -> tuple[int, float | None]:
+    """Clock direction and rough distance of a face box (x, y, w, h)."""
+    x, _, w, h = box
+    clock = clock_from_bearing(bearing_deg(x + w / 2, width, horizontal_fov_deg))
+    if h < _TINY_FACE_PX:
+        return clock, None
+    return clock, face_height_m * focal_length_px(width, height, horizontal_fov_deg) / h
 
 
 def with_face_distances(

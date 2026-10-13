@@ -136,3 +136,14 @@ def test_face_outside_the_person_box_and_other_classes_are_ignored():
     elsewhere = [(50, 100, 100, 120)]
     out = with_face_distances(placements, [person, chair], elsewhere, W, H, 70, 0.21)
     assert out == placements
+
+
+def test_face_position_direction_and_distance():
+    from aiforus.services.spatial import face_position, focal_length_px
+
+    focal = focal_length_px(1280, 720, 70)
+    h = 0.21 * focal / 2.0  # a face 2 m away
+    clock, distance = face_position((640 - h / 2, 100, h, h), 1280, 720, 70, 0.21)
+    assert clock == 12 and distance == pytest.approx(2.0)
+    clock, distance = face_position((1200, 100, 8, 8), 1280, 720, 70, 0.21)
+    assert clock == 1 and distance is None  # too small to measure

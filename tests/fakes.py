@@ -59,6 +59,12 @@ class FakeCamera:
         pass
 
 
+def centered_boxes(frame: np.ndarray, count: int) -> list[tuple[float, float, float, float]]:
+    """Tiny face boxes in the middle of ``frame``: straight ahead, no distance."""
+    height, width = frame.shape[:2]
+    return [(width / 2 - 1, height / 2 - 1, 2.0, 2.0)] * count
+
+
 def textured_frame(brightness: int = 128, size: tuple[int, int] = (48, 64)) -> np.ndarray:
     """A frame that passes the dark/blank checks."""
     rng = np.random.default_rng(0)

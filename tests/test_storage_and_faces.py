@@ -3,7 +3,7 @@ import pytest
 
 from aiforus.services.faces import EnrollStatus, FaceService, normalize_name
 from aiforus.storage import Database, PreferenceStore, SqlFaceStore
-from tests.fakes import textured_frame
+from tests.fakes import centered_boxes, textured_frame
 
 
 class FakeEncoder:
@@ -12,6 +12,9 @@ class FakeEncoder:
 
     def encode(self, frame):
         return list(self.next)
+
+    def encode_faces(self, frame):
+        return list(zip(centered_boxes(frame, len(self.next)), self.next, strict=True))
 
 
 def vec(*values):
@@ -77,6 +80,7 @@ def test_enroll_then_identify(faces):
     encoder.next = [vec(1.1), vec(5.0)]  # Budi (close) and a stranger (far)
     matches = service.identify(textured_frame())
     assert [m.name for m in matches] == ["Budi Santoso", None]
+    assert all(m.box is not None for m in matches)  # so the assistant can say where
 
 
 def test_enroll_refuses_multiple_faces_and_no_face(faces):

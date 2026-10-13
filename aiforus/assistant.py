@@ -22,11 +22,11 @@ from .hal.location import Location, LocationProvider
 from .hal.stt import SpeechInput, SpeechServiceError
 from .i18n import Translator
 from .intents import Intent, IntentRouter, IntentType
-from .services.faces import EnrollStatus, FaceService, normalize_name
+from .services.faces import EnrollStatus, FaceMatch, FaceService, normalize_name
 from .services.imaging import encode_jpeg
 from .services.llm import Answerer, VisionAnswerer, VisionTask
 from .services.navigation import NavigationError, NavigationSession, Navigator, describe_step
-from .services.spatial import group_placements, place, with_face_distances
+from .services.spatial import face_position, group_placements, place, with_face_distances
 from .services.vision import Look, VisionService, VisionStatus, summarize
 from .speech import Priority, SpeechQueue
 from .storage import PreferenceStore
@@ -403,13 +403,55 @@ class Assistant:
         if not matches:
             self.say("faces_none")
             return
-        self.say("faces_seen", count=len(matches))
-        known = list(dict.fromkeys(m.name for m in matches if m.name))
-        unknown = sum(1 for m in matches if m.name is None)
-        if known:
-            self.say("faces_known", names=self.tr.join(known))
-        if unknown:
-            self.say("faces_unknown", count=unknown)
+        if len(matches) == 1:
+            self.say("faces_seen_one")
+        else:
+            self.say("faces_seen", count=len(matches))
+        for sentence in self._describe_faces(matches, frame):
+            self.speech.say(sentence, Priority.HIGH)
+
+    # Up to this many unknown people are placed one by one; more are counted.
+    MAX_UNKNOWN_PLACED = 2
+
+    def _describe_faces(self, matches: list[FaceMatch], frame: np.ndarray) -> list[str]:
+        """ "Kaffa di jam 12, sekitar 1 meter." - known people first, nearest first."""
+        height, width = frame.shape[:2]
+        placed = []
+        for match in matches:
+            clock, distance = (
+                face_position(
+                    match.box,
+                    width,
+                    height,
+                    self.settings.camera.horizontal_fov_deg,
+                    self.settings.vision.face_height_m,
+                )
+                if match.box is not None
+                else (12, None)
+            )
+            placed.append((match, clock, distance))
+        placed.sort(key=lambda p: (p[0].name is None, p[2] if p[2] is not None else float("inf")))
+
+        sentences = []
+        unknown = [p for p in placed if p[0].name is None]
+        for match, clock, distance in placed:
+            if match.name is None and len(unknown) > self.MAX_UNKNOWN_PLACED:
+                continue
+            where = self._where(distance)
+            if match.name is not None:
+                sentences.append(self.tr.t("face_known_at", name=match.name, clock=clock, where=where))
+            else:
+                sentences.append(self.tr.t("face_unknown_at", clock=clock, where=where))
+        if len(unknown) > self.MAX_UNKNOWN_PLACED:
+            sentences.append(self.tr.t("faces_unknown", count=len(unknown)))
+        return sentences
+
+    def _where(self, distance: float | None) -> str:
+        if distance is None:
+            return ""
+        if distance < 1.0:
+            return self.tr.t("spatial_close")
+        return self.tr.t("spatial_distance", distance=self.tr.approx_distance(distance))
 
     async def _enroll_face(self, intent: Intent) -> None:
         if self.faces is None or self.vision is None or not self.vision.can():

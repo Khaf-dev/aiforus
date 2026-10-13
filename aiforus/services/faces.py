@@ -21,6 +21,9 @@ FaceBox = tuple[float, float, float, float]  # x, y, width, height in pixels
 
 
 class FaceEncoder(Protocol):
+    def encode_faces(self, frame: np.ndarray) -> list[tuple[FaceBox, np.ndarray]]:
+        """(box, encoding) per face, ordered left to right."""
+
     def encode(self, frame: np.ndarray) -> list[np.ndarray]:
         """One encoding per face, ordered left to right."""
 
@@ -119,18 +122,20 @@ class OpenCVFaceEncoder:
             rows = self._detect_rows(frame)
         return [(float(r[0]), float(r[1]), float(r[2]), float(r[3])) for r in rows]
 
-    def encode(self, frame: np.ndarray) -> list[np.ndarray]:
+    def encode_faces(self, frame: np.ndarray) -> list[tuple[FaceBox, np.ndarray]]:
         with self._lock:
             rows = self._detect_rows(frame)
-            if not rows:
-                return []
-            encodings = []
+            faces = []
             for row in rows:
                 aligned = self._recognizer.alignCrop(frame, row)
                 feature = np.asarray(self._recognizer.feature(aligned), dtype=np.float64).reshape(-1)
                 norm = float(np.linalg.norm(feature))
-                encodings.append(feature / norm if norm > 0 else feature)
-        return encodings
+                box = (float(row[0]), float(row[1]), float(row[2]), float(row[3]))
+                faces.append((box, feature / norm if norm > 0 else feature))
+        return faces
+
+    def encode(self, frame: np.ndarray) -> list[np.ndarray]:
+        return [encoding for _, encoding in self.encode_faces(frame)]
 
 
 class DlibFaceEncoder:
@@ -150,7 +155,7 @@ class DlibFaceEncoder:
         self._model = detection_model
         self._lock = threading.Lock()
 
-    def encode(self, frame: np.ndarray) -> list[np.ndarray]:
+    def encode_faces(self, frame: np.ndarray) -> list[tuple[FaceBox, np.ndarray]]:
         import face_recognition
 
         rgb = np.ascontiguousarray(frame[:, :, ::-1])  # BGR -> RGB
@@ -160,7 +165,16 @@ class DlibFaceEncoder:
         # (top, right, bottom, left): sort by left edge so names are spoken
         # in the order the user would scan the scene.
         paired = sorted(zip(locations, encodings, strict=True), key=lambda pair: pair[0][3])
-        return [np.asarray(enc, dtype=np.float64) for _, enc in paired]
+        return [
+            (
+                (float(left), float(top), float(right - left), float(bottom - top)),
+                np.asarray(enc, dtype=np.float64),
+            )
+            for (top, right, bottom, left), enc in paired
+        ]
+
+    def encode(self, frame: np.ndarray) -> list[np.ndarray]:
+        return [encoding for _, encoding in self.encode_faces(frame)]
 
     def detect(self, frame: np.ndarray) -> list[FaceBox]:
         import face_recognition
@@ -194,6 +208,7 @@ class EnrollResult:
 class FaceMatch:
     name: str | None  # None = unknown person
     distance: float
+    box: FaceBox | None = None  # x, y, width, height in the frame
 
 
 def normalize_name(raw: str) -> str:
@@ -263,13 +278,15 @@ class FaceService:
         return self._encoder.detect(frame)
 
     def identify(self, frame: np.ndarray) -> list[FaceMatch]:
-        encodings = self._encoder.encode(frame)
-        if not encodings:
+        faces = self._encoder.encode_faces(frame)
+        if not faces:
             return []
         known = self._store.all()
-        return [self._match(encoding, known) for encoding in encodings]
+        return [self._match(encoding, known, box) for box, encoding in faces]
 
-    def _match(self, encoding: np.ndarray, known: dict[str, list[np.ndarray]]) -> FaceMatch:
+    def _match(
+        self, encoding: np.ndarray, known: dict[str, list[np.ndarray]], box: FaceBox | None = None
+    ) -> FaceMatch:
         best_name: str | None = None
         best_distance = float("inf")
         for name, samples in known.items():
@@ -279,8 +296,8 @@ class FaceService:
             if distance < best_distance:
                 best_name, best_distance = name, distance
         if best_name is not None and best_distance <= self._threshold:
-            return FaceMatch(best_name, best_distance)
-        return FaceMatch(None, best_distance)
+            return FaceMatch(best_name, best_distance, box)
+        return FaceMatch(None, best_distance, box)
 
     def known_people(self) -> list[str]:
         return self._store.names()

@@ -58,7 +58,9 @@ MESSAGES: dict[str, dict[str, str]] = {
         "faces_unavailable": "Pengenalan wajah belum terpasang di perangkat ini.",
         "faces_none": "Aku tidak melihat wajah.",
         "faces_seen": "Aku melihat {count} wajah.",
-        "faces_known": "Yang aku kenal: {names}.",
+        "faces_seen_one": "Aku melihat 1 wajah.",
+        "face_known_at": "{name} di jam {clock}{where}.",
+        "face_unknown_at": "Orang yang belum aku kenal di jam {clock}{where}.",
         "faces_unknown": "{count} orang belum aku kenal.",
         "enroll_need_name": "Sebutkan namanya, misalnya: kenali wajah sebagai Budi.",
         "enroll_look": (
@@ -188,7 +190,9 @@ MESSAGES: dict[str, dict[str, str]] = {
         "faces_unavailable": "Face recognition is not installed on this device.",
         "faces_none": "I don't see any faces.",
         "faces_seen": "I see {count} faces.",
-        "faces_known": "I recognize: {names}.",
+        "faces_seen_one": "I see one face.",
+        "face_known_at": "{name} at {clock} o'clock{where}.",
+        "face_unknown_at": "Someone I don't know at {clock} o'clock{where}.",
         "faces_unknown": "{count} people I don't know yet.",
         "enroll_need_name": "Tell me the name, for example: enroll face as Budi.",
         "enroll_look": (

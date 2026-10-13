@@ -15,7 +15,7 @@ from aiforus.services.navigation import NavigationError, Place, parse_osrm_route
 from aiforus.services.vision import Detection, TextRegion, VisionService
 from aiforus.speech import SpeechQueue
 from aiforus.storage import Database, PreferenceStore, SqlFaceStore
-from tests.fakes import FakeCamera, FakeTTS, flat_frame, textured_frame, wait_until
+from tests.fakes import FakeCamera, FakeTTS, centered_boxes, flat_frame, textured_frame, wait_until
 from tests.test_navigation import OSRM_SAMPLE
 
 # "One moment" acknowledgements may or may not be spoken depending on timing.
@@ -72,6 +72,13 @@ class StubEncoder:
         if self.script:
             return list(self.script.pop(0))
         return list(self.next)
+
+    face_boxes: list | None = None  # boxes for encode_faces; default: centred
+
+    def encode_faces(self, frame):
+        encodings = self.encode(frame)
+        boxes = self.face_boxes or centered_boxes(frame, len(encodings))
+        return list(zip(boxes, encodings, strict=True))
 
     boxes: list = []
 
@@ -376,7 +383,11 @@ async def test_enroll_recognize_list_forget(tmp_path):
 
         h.encoder.next = [v(1.1), v(9)]
         spoken = await h.say("siapa ini")
-        assert spoken == ["Aku melihat 2 wajah.", "Yang aku kenal: Budi.", "1 orang belum aku kenal."]
+        assert spoken == [
+            "Aku melihat 2 wajah.",
+            "Budi di jam 12.",
+            "Orang yang belum aku kenal di jam 12.",
+        ]
 
         assert await h.say("siapa saja yang kamu kenal") == ["Aku mengenal 1 orang: Budi."]
         assert await h.say("lupakan budi") == ["Data wajah Budi sudah dihapus."]
@@ -675,3 +686,41 @@ async def test_unreadable_text_fallback_to_cloud_model_is_announced(tmp_path, fa
         spoken = await h.say("baca tulisan")
         assert "Fotonya aku kirim ke layanan AI di internet." in spoken
         assert spoken[-1] == "Ok."
+
+
+# -- where people are --------------------------------------------------------
+
+
+def face_at(distance_m, center_x=640, face_height_m=0.21):
+    """A face box (x, y, w, h) ``distance_m`` away in an HD frame."""
+    h = face_height_m * FOCAL_PX / distance_m
+    return (center_x - h * 0.4, 200, h * 0.8, h)
+
+
+async def test_people_are_placed_known_first_and_nearest_first(tmp_path):
+    async with Harness(tmp_path, frames=[textured_frame(size=HD)]) as h:
+        h.assistant.faces.add_samples("Kaffa", [v(1)])
+        h.assistant.faces.add_samples("Siti", [v(3)])
+        h.encoder.next = [v(9), v(3), v(1)]  # stranger, Siti, Kaffa (left to right)
+        h.encoder.face_boxes = [face_at(3, 200), face_at(2.5, 640), face_at(0.8, 1100)]
+        assert await h.say("ini siapa") == [
+            "Aku melihat 3 wajah.",
+            "Kaffa di jam 1, kurang dari 1 meter.",
+            "Siti di jam 12, sekitar 2,5 meter.",
+            "Orang yang belum aku kenal di jam 11, sekitar 3 meter.",
+        ]
+
+
+async def test_many_strangers_are_counted_not_placed(tmp_path):
+    async with Harness(tmp_path, frames=[textured_frame(size=HD)], language="en") as h:
+        h.encoder.next = [v(7), v(8), v(9)]
+        h.encoder.face_boxes = [face_at(2, x) for x in (300, 640, 1000)]
+        assert await h.say("who is this") == ["I see 3 faces.", "3 people I don't know yet."]
+
+
+async def test_known_face_in_english_with_distance(tmp_path):
+    async with Harness(tmp_path, frames=[textured_frame(size=HD)], language="en") as h:
+        h.assistant.faces.add_samples("Kaffa", [v(1)])
+        h.encoder.next = [v(1)]
+        h.encoder.face_boxes = [face_at(2)]
+        assert await h.say("who is this") == ["I see one face.", "Kaffa at 12 o'clock, about 2 meters."]

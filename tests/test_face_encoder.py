@@ -93,6 +93,15 @@ def test_encodes_faces_left_to_right_as_unit_vectors(cv2, tmp_path):
     assert encoder.default_threshold == pytest.approx(1.128)
 
 
+def test_encode_faces_returns_boxes_with_encodings(cv2, tmp_path):
+    make_models(tmp_path)
+    encoder = OpenCVFaceEncoder(tmp_path)
+    cv2["detector"].rows = [row(300), row(20)]
+    faces = encoder.encode_faces(np.zeros((480, 640, 3), dtype=np.uint8))
+    assert [box for box, _ in faces] == [(20.0, 10.0, 50.0, 60.0), (300.0, 10.0, 50.0, 60.0)]
+    assert all(np.linalg.norm(e) == pytest.approx(1.0) for _, e in faces)
+
+
 def test_no_faces(cv2, tmp_path):
     make_models(tmp_path)
     encoder = OpenCVFaceEncoder(tmp_path)
