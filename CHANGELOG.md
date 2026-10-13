@@ -6,6 +6,26 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- **The assistant is called Nemo** (`app.assistant_name`). "Nemo siap",
+  the LLM introduces itself as Nemo, and the name is accepted in front of
+  any command ("Nemo, apa di depan", "Halo Nemo, siapa ini"); the name alone
+  gets "Ya?". "Nemo, tolong" is still an emergency; "matikan Nemo" exits.
+- **Wake word "Hai Nemo" and push-to-talk** (`listening`, new `wake`
+  extra). Voice mode now waits for "Hai Nemo" / "Halo Nemo" / "Nemo" or the
+  **Space** key, beeps, records one command and only sends that to speech
+  recognition. The key also interrupts the assistant; with
+  `listening.headset: true` the name does too. Detection runs locally with
+  Vosk (default, small English model, no training; hears the name and
+  "help") or openWakeWord (trained models; also "tolong"/"darurat" without
+  the name, only when said on their own). Falls back to key-only, wake-only
+  or the old always-listening mode, and `--check` says which is active.
+  `listening.mode: always` keeps the old behaviour.
+- `--record-wake-samples [N]` records your voice for the wake word models
+  (`data/wake_samples/`, stays on this machine).
+- `tools/wakeword/`: a Colab notebook that trains `hai_nemo.onnx` and
+  `tolong.onnx`, optionally with your recordings (off by default; uploading
+  them is an explicit choice). Pins the versions that still work and works
+  around current breakages of the upstream recipe.
 - **"apakah ada …?"** ("is there a …?"): the fast detector answers "Ya.
   Sepeda motor di jam 12, sekitar 2,5 meter." or "Aku tidak melihat sepeda
   motor di kamera. Itu bukan berarti tidak ada." Everyday words map to

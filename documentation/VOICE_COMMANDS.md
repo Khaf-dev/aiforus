@@ -9,11 +9,36 @@ Commands are matched by fixed rules, not by AI, so they behave the same every
 time. Anything that doesn't match a command is a
 [general question](#general-questions).
 
+## Calling Nemo
+
+The assistant is called **Nemo** (`app.assistant_name`). In voice mode it
+only listens for a command after you call it, so nothing else you say is
+sent to speech recognition:
+
+| How | What to do |
+| --- | --- |
+| Wake word | Say **"Hai Nemo"** (or "Halo Nemo", "Nemo"), wait for the short *ting*, then the command. In one breath — *"Hai Nemo, apa di depan"* — usually works too. |
+| Push-to-talk | Press **Space** (`listening.push_to_talk_key`), then say the command. Windows console only for now. |
+| Interrupt | Press Space while Nemo is talking: it stops and listens. Saying "Hai Nemo" interrupts only with `listening.headset: true` — through speakers it would hear itself. |
+| Emergency | **"Tolong"** or **"Darurat"** on its own works without the name (needs the trained openWakeWord model; the default Vosk engine only knows **"help"**). "Tolong ambilkan air" is not an emergency. |
+
+- The name is optional in front of any command: *"Nemo, siapa ini"* is the
+  same as *"siapa ini"*, and *"Nemo, tolong"* is an emergency. Only the
+  name — *"Nemo?"* — gets *"Ya?"*.
+- The name only counts at the start: *"film Finding Nemo bagus nggak"* is a
+  general question.
+- *"matikan Nemo"* works like "matikan asisten".
+- `listening.mode: always` brings back the old behaviour (every sentence is
+  recognised). With `--text` you type and none of this applies.
+- Setup, engines and training your own models:
+  [CONFIGURATION.md](CONFIGURATION.md#listening) and
+  [tools/wakeword](../tools/wakeword/README.md).
+
 ## Safety and control
 
 | What | Bahasa Indonesia | English |
 | --- | --- | --- |
-| Emergency | "tolong", "darurat", "saya jatuh", "minta pertolongan", "panggil ambulans" | "help", "help me", "emergency", "I fell", "call for help" |
+| Emergency | "tolong", "darurat", "saya jatuh", "minta pertolongan", "panggil ambulans" (with or without "Nemo") | "help", "help me", "emergency", "I fell", "call for help" |
 | Stop talking | "diam", "stop", "berhenti membaca" | "stop", "be quiet" |
 | List commands | "bantuan", "apa saja yang bisa kamu lakukan" | "help menu", "what can you do" |
 | Language | "ganti bahasa ke Inggris" | "change language to Indonesian" |

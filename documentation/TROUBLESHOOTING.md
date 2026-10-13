@@ -35,9 +35,29 @@ logs.
 | Symptom | Fix |
 | --- | --- |
 | *"Pengenalan suara tidak bisa terhubung ke internet"* | Speech recognition uses Google's online service; check the connection. Use `--text` to type commands offline. |
-| It ignores you while it is talking | Expected: it doesn't listen while speaking (otherwise it hears itself). Wait until it finishes, or say "diam" after it stops. Barge-in is planned. |
+| It ignores you while it is talking | Press **Space**: it stops and listens. Saying "Hai Nemo" while it talks only works with `listening.headset: true` (through speakers it would hear itself). |
 | **Windows:** nothing happens until you press Enter | Clicking in the console window turned on QuickEdit selection, which pauses the program. Fixed: QuickEdit is now disabled while the assistant runs. If you still see it, update to the latest version. |
 | Wrong words recognised | Speak close to the microphone in a quiet place; check that `speech.recognition_locale` matches the language. `speech.listen_timeout_s` / `phrase_time_limit_s` control how long it listens. |
+
+## Wake word and push-to-talk
+
+`--check` shows a `listening` line with what is active, e.g. *wake word
+'Hai Nemo' (vosk) + push-to-talk [space]*.
+
+| Symptom | Fix |
+| --- | --- |
+| `wake word (vosk) unavailable - vosk is not installed` | `pip install -e ".[wake]"`. |
+| `Vosk model not found in models/vosk/…` | `python -m aiforus --download-models` (needs internet once, ~40 MB). Behind a firewall: download `vosk-model-small-en-us-0.15.zip` from [alphacephei.com/vosk/models](https://alphacephei.com/vosk/models) and unzip it into `models/vosk/`. |
+| `The Vosk model doesn't know the word(s) …` | The English Vosk model only knows English words. Pick an `app.assistant_name` it knows, or use `wake_engine: openwakeword` with models trained for the name. |
+| `Wake word model models/wakeword/hai_nemo.onnx not found` | `wake_engine: openwakeword` needs your trained models — see [tools/wakeword](../tools/wakeword/README.md) — or go back to `wake_engine: vosk`. |
+| `openWakeWord could not load its models` | `python -m aiforus --download-models` fetches its two shared feature models. |
+| `listening always - fallback: neither the wake word nor the key is available` | Fix the wake word line above it, or run in the Windows console for the key. Until then every sentence is sent to speech recognition, as before. |
+| It doesn't react to "Hai Nemo" | Speak clearly, ~1 m from the microphone, and wait for the *ting* before the command. Vosk hears an English "Nemo" best ("nee-mo"). openWakeWord: lower `listening.wake_threshold` a little (e.g. 0.4), or retrain with your own recordings. |
+| It wakes up by itself | openWakeWord: raise `listening.wake_threshold` (e.g. 0.6). It never wakes from its own voice through speakers unless `listening.headset: true` — set that only with headphones. |
+| No *ting* | `listening.beep: true`, and check the default output device. |
+| Space does nothing | The console window must have focus (click it once). The key works on Windows only for now; elsewhere use the wake word or `push_to_talk_key: none`. |
+| It cuts you off mid-sentence / waits too long | `listening.end_silence_s` (default 0.8 s): raise it if it cuts you off, lower it if it waits too long. |
+| "Tolong" isn't treated as an emergency | With Vosk say **"help"** (it can't hear "tolong"). With openWakeWord it must be said on its own; "tolong ambilkan air" is a request, not an emergency. Said through Google ("Hai Nemo, tolong") it always works. |
 
 ## Camera and seeing
 

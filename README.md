@@ -29,7 +29,8 @@ headphones.
 
 | Capability | Status | How |
 | --- | --- | --- |
-| Voice commands (id / en) | ✅ | Deterministic rule-based router; Google speech recognition (online) |
+| Voice commands (id / en) | ✅ | Deterministic rule-based router; Google speech recognition (online) — only for the command after the wake word or key |
+| Wake word **"Hai Nemo"** and push-to-talk | ✅ | Detected on this machine ([Vosk](https://alphacephei.com/vosk/) out of the box, or [openWakeWord](https://github.com/dscripka/openWakeWord) models you [train once](tools/wakeword/README.md)); **Space** to talk or to interrupt |
 | Spoken replies | ✅ | Offline neural TTS ([Piper](https://github.com/OHF-Voice/piper1-gpl)) with a natural Indonesian voice, pyttsx3 fallback; prioritised and interruptible |
 | Describe surroundings (fast) | ✅ | YOLOv8n on this machine, with clock directions and rough distance: *"Kursi di jam 1, sekitar 2 meter."* |
 | Detailed description, documents, questions about the image | ✅ optional | Vision-language model, local by default (Ollama `gemma3:4b`): *"jelaskan lebih detail"*, *"baca dokumen"*, *"lihat, ini uang berapa?"* |
@@ -44,20 +45,24 @@ headphones.
 ## What it sounds like
 
 ```
-You:  "apa di depan"
-AIForUs: "Orang di jam 11, sekitar 1,5 meter. Kursi di jam 1, sekitar 2 meter."
+You:  "Hai Nemo"  (ting)  "apa di depan"
+Nemo: "Orang di jam 11, sekitar 1,5 meter. Kursi di jam 1, sekitar 2 meter."
 
 You:  "ini siapa"
-AIForUs: "Aku melihat 2 wajah. Budi di jam 12, sekitar 1,5 meter.
-          Orang yang belum aku kenal di jam 2, sekitar 3 meter."
+Nemo: "Aku melihat 2 wajah. Budi di jam 12, sekitar 1,5 meter.
+       Orang yang belum aku kenal di jam 2, sekitar 3 meter."
 
 You:  "lihat, ini uang berapa?"
-AIForUs: "Sebentar, aku perhatikan dulu."  …  (the vision model's answer, a few seconds later)
+Nemo: "Sebentar, aku perhatikan dulu."  …  (the vision model's answer, a few seconds later)
 
 You:  "ada rintangan?"
-AIForUs: "… deteksi rintangan lewat suara belum tersedia … Tetap gunakan tongkat."
-         (it never says "the path is clear")
+Nemo: "… deteksi rintangan lewat suara belum tersedia … Tetap gunakan tongkat."
+      (it never says "the path is clear")
 ```
+
+The assistant is called **Nemo** (`app.assistant_name`). Say "Hai Nemo" (or
+press **Space**) before each command — see
+[Calling Nemo](documentation/VOICE_COMMANDS.md#calling-nemo).
 
 Clock directions are the convention taught in orientation & mobility
 training: 12 = straight ahead, 3 = right, 9 = left. Distances are estimates
@@ -77,10 +82,10 @@ python -m venv .venv
 .venv\Scripts\activate
 python -m pip install -U pip
 
-# Voice, natural voice, camera features and the LLM client
-pip install -e ".[voice,piper,vision,llm]"
+# Voice, wake word, natural voice, camera features and the LLM client
+pip install -e ".[voice,wake,piper,vision,llm]"
 
-# Piper voices (id + en, ~60 MB each) and face models (~40 MB)
+# Piper voices (id + en, ~60 MB each), face models (~40 MB), wake word model (~40 MB)
 python -m aiforus --download-models
 ```
 
@@ -103,6 +108,9 @@ python -m aiforus --check
 
 ```
   voice output (piper)       ok
+  push-to-talk key           ok
+  wake word (vosk)           ok
+  listening                  wake word 'Hai Nemo' (vosk) + push-to-talk [space] - only commands are sent to speech recognition
   voice input                ok
   camera                     ok
   object detection           ok
@@ -127,7 +135,9 @@ Anything that isn't `ok` says why; see
 python -m aiforus
 ```
 
-Say **"bantuan"** to hear what it can do.
+It says *"Nemo siap"* and how to call it. Say **"Hai Nemo"**, wait for the
+*ting*, then **"bantuan"** to hear what it can do — or press **Space** and
+speak.
 
 > **Linux / macOS:** the same steps work (`source .venv/bin/activate`).
 > PyAudio needs the PortAudio headers first: `sudo apt install portaudio19-dev`
@@ -143,6 +153,7 @@ python -m aiforus --lang en        # English
 python -m aiforus --check          # component report, then exit
 python -m aiforus --preview        # live camera window (see below)
 python -m aiforus --debug          # verbose logs
+python -m aiforus --record-wake-samples   # record your voice for training the wake word
 ```
 
 `python app.py` still works and does the same as `python -m aiforus`.
@@ -188,7 +199,8 @@ Anything else is treated as a general question for the LLM.
 
 | Data | Where it goes |
 | --- | --- |
-| Your voice | Sent to Google's speech recognition service (needs internet). Offline recognition is planned. |
+| Your voice | The wake word is detected on this machine; only the command after "Hai Nemo" or the key is sent to Google's speech recognition (needs internet). With `listening.mode: always` everything you say is sent. Offline recognition is planned. |
+| Wake word recordings | `--record-wake-samples` saves them in `data/wake_samples/`. They leave your computer only if you upload them for training yourself. |
 | Camera images | Processed on this machine and never stored. Detailed descriptions send one photo to the configured vision model — **local by default**. A cloud model is used only if you set `llm.allow_images_to_cloud: true`, and the assistant then says so every time. |
 | Face encodings | Stored locally in `data/aiforus.db`. Not encrypted yet — keep that folder private. Ask people before enrolling their face. |
 | General questions | Stay on your machine with a local LLM (Ollama); sent to the provider only if you configure a hosted one. |
@@ -198,7 +210,7 @@ Anything else is treated as a general question for the LLM.
 ## How it works
 
 ```
-mic/keyboard ─► SpeechInput ─► IntentRouter ─► Assistant ─► SpeechQueue ─► TTS ─► speaker
+mic ─► "Hai Nemo" / Space ─► SpeechInput ─► IntentRouter ─► Assistant ─► SpeechQueue ─► TTS ─► speaker
                                                   │
          ┌───────────────┬───────────────┬────────┴───────┬──────────────────┐
          ▼               ▼               ▼                ▼                  ▼
@@ -208,6 +220,8 @@ mic/keyboard ─► SpeechInput ─► IntentRouter ─► Assistant ─► Spee
    fast, local       local          local by default   local by default  online
 ```
 
+- It **listens only when called**: the wake word and the key are handled
+  locally, and only the command that follows is sent to speech recognition.
 - Commands are matched by **deterministic rules**, never by the LLM — an
   emergency or "turn off" must be predictable and testable.
 - There are **two speeds of seeing**: "apa di depan" is fast local object
@@ -233,6 +247,8 @@ recipes for:
 - **Local LLM / VLM with Ollama** (default) or a **hosted provider**
   (OpenAI or any OpenAI-compatible API).
 - **Calibrating distances** to your camera.
+- **Listening:** wake word engine, push-to-talk key, headset, or the old
+  always-listening mode.
 - **Edge devices** (int8 face models).
 
 ## Troubleshooting
@@ -241,6 +257,7 @@ recipes for:
 | --- | --- |
 | `TTS voice for 'id' … NOT FOUND` | `pip install -e ".[piper]"` and `python -m aiforus --download-models` |
 | Windows: nothing happens until you press Enter | Fixed in the current version (console QuickEdit is disabled while running). Update. |
+| `Vosk model not found` / it doesn't react to "Hai Nemo" | `pip install -e ".[wake]"`, `python -m aiforus --download-models`; see [Wake word](documentation/TROUBLESHOOTING.md#wake-word-and-push-to-talk) |
 | `LLM server NOT reachable` | Start Ollama (`ollama serve` or the tray app) and `ollama pull gemma3:4b` |
 | `detailed vision (VLM) blocked` | The endpoint is in the cloud; set `llm.allow_images_to_cloud: true` only if you accept sending photos |
 | Distances are consistently off | [Calibrate](documentation/CONFIGURATION.md#calibrating-distances) `vision.face_height_m` / `camera.horizontal_fov_deg` — `--preview` shows what each box was measured as |
@@ -268,11 +285,13 @@ aiforus/
 ├── speech.py         priority speech queue with interruption
 ├── locales.py        every spoken sentence, in id and en
 ├── storage.py        SQLite (face embeddings, preferences)
-├── downloads.py      Piper voices and face models
-├── hal/              camera, microphone, TTS (Piper, pyttsx3), location, console
+├── downloads.py      Piper voices, face and wake word models
+├── wake_samples.py   --record-wake-samples
+├── hal/              camera, microphone, wake word + push-to-talk, TTS (Piper, pyttsx3), location, console
 └── services/         vision, spatial (clock + distance), faces, imaging, llm, navigation
 tests/                pytest, hardware faked in tests/fakes.py
 documentation/        architecture, configuration, voice commands, troubleshooting
+tools/wakeword/       Colab notebook to train the "Hai Nemo" / "Tolong" models
 ```
 
 Contribution rules (every sentence in both languages, never claim something
@@ -288,8 +307,8 @@ is safe, heavy imports stay lazy) are in
   - ✅ edge-ready face recognition, multi-sample enrollment
   - ✅ any OpenAI-compatible LLM, local by default
   - ✅ detailed descriptions, documents and image questions (VLM)
-  - next: offline Indonesian speech recognition, push-to-talk / wake word
-    with barge-in
+  - ✅ wake word "Hai Nemo" + push-to-talk with barge-in
+  - next: offline Indonesian speech recognition
 - **Fase 2 — Hazards:** depth estimation for head-level obstacles, vehicle
   tracking, pedestrian lights, sound events (horns, sirens), real emergency alerts.
 - **Fase 3 — Hardware:** smart-glasses adapter, phone GPS, heading.

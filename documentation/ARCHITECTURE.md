@@ -20,9 +20,13 @@ The glasses themselves only need a camera, a microphone and a speaker.
    + spatial.py
 ```
 
-1. `SpeechInput.listen()` returns one utterance (in a worker thread). While
-   the assistant is speaking it doesn't listen (half-duplex), so it never
-   transcribes its own voice.
+1. `SpeechInput.listen()` returns one utterance (in a worker thread). In
+   voice mode this is `TriggeredSpeechInput` (`hal/listening.py`): it waits
+   for "Hai Nemo" or the push-to-talk key and only then records and
+   transcribes one command — see [Listening](#listening-wake-word-and-push-to-talk).
+   With `listening.mode: always` it is `GoogleSpeechInput` (`hal/stt.py`),
+   which transcribes everything but doesn't listen while the assistant
+   speaks (half-duplex). `--text` reads the keyboard.
 2. `IntentRouter.parse()` normalises the text (lowercase, no punctuation,
    polite words stripped) and maps it to an `Intent` with slots (name,
    destination, language, question). Deterministic rules, Indonesian and
@@ -44,6 +48,8 @@ The glasses themselves only need a camera, a microphone and a speaker.
 | `locales.py`, `i18n.py` | Every spoken sentence in `id` and `en`; a test enforces identical keys and placeholders. |
 | `storage.py` | SQLite via SQLAlchemy 2.0: face embeddings (raw float vectors) and preferences. |
 | `downloads.py` | Atomic downloads of Piper voices and face models into `models/`. |
+| `hal/listening.py` | Wake word (Vosk or openWakeWord, on this machine), push-to-talk key, end-of-command detection, beep; sends only the command audio to speech recognition. |
+| `wake_samples.py` | `--record-wake-samples`: records your voice for training the wake word models (`tools/wakeword`). |
 | `hal/` | Hardware adapters with lazy imports: camera (on-demand, or `ContinuousCamera` reading on a background thread for the preview), speech input, Piper / pyttsx3 output, IP location, Windows console. |
 | `monitor.py` | What the assistant heard, saw and said, as plain data (`Mark`: box + label + kind). No drawing, no OpenCV. |
 | `preview.py` | `--preview`: draws marks on frames (`annotate`) and shows them in an OpenCV window on its own thread. |
@@ -96,6 +102,45 @@ something is safe. Obstacle questions are never routed to it.
 Accuracy is roughly ±30 %; everything is spoken with *about*. Calibration:
 [CONFIGURATION.md](CONFIGURATION.md#calibrating-distances).
 
+## Listening: wake word and push-to-talk
+
+```
+ mic ─80 ms frames─► TriggeredSpeechInput ─────────────────────────────────────────────┐
+                       │ key pressed? ─────────────► KEY  ┐                            │
+                       │ assistant speaking? ─ yes ─► skip the detector (no headset)   │
+                       │ WakeDetector.process(frame)                                   │
+                       │   ├─ WAKE ("Hai Nemo") ────────────┤                          │
+                       │   └─ EMERGENCY ("tolong", alone) ──┼──► "darurat" (no audio sent)
+                       ▼                                    ▼                          │
+                 on_trigger: stop speaking, beep    CommandRecorder (energy VAD) ──► Transcriber ──► text
+                                                    until 0.8 s of silence           (Google, only
+                                                                                      this command)
+```
+
+- **Detectors** (`WakeDetector` protocol): `VoskWakeDetector` runs a small
+  English Vosk model restricted to a grammar of the name ("nemo", "hi
+  nemo", …) and "help"; no training, but it can't hear Indonesian words
+  such as "tolong". `OpenWakeWordDetector` runs two small ONNX models
+  trained with `tools/wakeword` ("hai nemo", "tolong/darurat"), the path
+  meant for glasses and phones. Both run on this machine.
+- **Emergency without the name** must be followed by silence: "tolong" alone
+  is an emergency, "tolong ambilkan air" is not. Vosk only reports whole
+  utterances; for openWakeWord the listener checks the next second.
+- **Barge-in:** the key always interrupts. The wake word is ignored while the
+  assistant speaks unless `listening.headset: true`, because through
+  speakers the microphone hears the assistant itself (no echo cancellation
+  yet), plus a short echo guard afterwards.
+- **What gets recorded:** the audio from just before a wake word is kept so a
+  command said in one breath ("Hai Nemo apa di depan") isn't clipped, but it
+  never counts as the start of the command; the beep and the assistant's
+  voice fading out in the first 0.32 s don't either. Before a key press
+  nothing is kept.
+- **Fallbacks:** wake word missing → key only; key unavailable (not a
+  Windows console) → wake word only; neither → `always`. `--check` shows
+  which one is active.
+- The router strips a leading "(hai|halo|…) nemo", so typed commands and
+  the always mode accept the name too; only the name gives "Ya?".
+
 ## Speech priorities
 
 | Priority | Used for | Behaviour |
@@ -113,7 +158,8 @@ order, so the answer can never jump ahead of the notice.
 
 | Data | Leaves the machine? | Notes |
 | --- | --- | --- |
-| Microphone audio | Yes — Google speech recognition | Offline STT planned |
+| Microphone audio | Only the command after "Hai Nemo" or the key goes to Google speech recognition; the wake word is detected locally. In `listening.mode: always` everything goes. | Offline STT planned |
+| Wake word recordings | No | `--record-wake-samples` saves to `data/wake_samples/`; uploading them for training is your choice |
 | Camera frames | No, except the detailed path to a **cloud** VLM | Needs `llm.allow_images_to_cloud: true`; announced every time; `--check` shows "blocked" otherwise |
 | Face embeddings | No | `data/aiforus.db`, raw float64 vectors; encryption planned |
 | General questions | Only to a hosted LLM if configured | Local Ollama by default |
@@ -130,7 +176,9 @@ link-local IP address (`is_local_endpoint`).
 | **Emergency is matched first, on the raw utterance** | A missed emergency is far worse than a false one, and a false one only speaks guidance. |
 | **Exit requires the whole phrase plus confirmation** | The old substring router shut the app down on "is my friend here" ("friend" contains "end"). |
 | **Priority speech queue with interruption** | A future hazard alert must cut off whatever is being read. |
-| **Half-duplex listening** | With a real microphone the assistant would otherwise transcribe its own voice. Barge-in needs a wake word or echo cancellation (planned). |
+| **Wake word + push-to-talk instead of always listening** | Only commands go to the online recogniser (privacy, cost), the assistant no longer reacts to every conversation in the room, and the key gives barge-in. Detection runs locally, with a fallback chain so the user can always talk. |
+| **Two wake word engines** | Vosk works immediately but only knows English words; openWakeWord needs a one-off training run but learns Indonesian phrases and is small enough for glasses/phones. |
+| **Emergency word must stand alone** | "tolong" is also the polite "please". A false alarm is acceptable, but not on every polite request. |
 | **Hardware abstraction layer with lazy imports** | Swap laptop webcam → glasses camera by writing one adapter. Tests and CI run without OpenCV, PyAudio, ML models or a GPU. |
 | **Piper as the default voice** | Natural offline Indonesian voice; Windows rarely ships one pyttsx3 can use. Audio is played in ~50 ms slices so "diam" stops it almost immediately. |
 | **"I can't see" is different from "I see nothing"** | Dark or covered frames are reported explicitly; "nothing detected" must never be mistaken for "all clear". |
@@ -177,7 +225,12 @@ it (`face.quantized: true`).
 ## Known limitations (tracked in the roadmap)
 
 - Speech recognition uses Google's online API; offline STT is planned.
-- No barge-in: you can't interrupt by talking while it speaks (only after).
+- Barge-in by voice needs a headset (`listening.headset`); with speakers only
+  the push-to-talk key interrupts. No echo cancellation yet.
+- The push-to-talk key is read from the Windows console window (it must have
+  focus); a global hotkey or a hardware button on the glasses is planned.
+- The default Vosk wake engine is English: it hears "Nemo" and "help" but
+  not "tolong"/"darurat" — that needs the trained openWakeWord models.
 - No obstacle, traffic or hazard detection yet; sound-based detection from
   v1.1 was removed because it was not reliable (old code: tag
   `v1.1.0-legacy`).

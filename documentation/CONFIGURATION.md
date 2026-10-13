@@ -11,7 +11,7 @@ AIForUs reads two things at startup:
 After changing anything, run `python -m aiforus --check`.
 
 Contents: [Environment](#environment) · [app](#app) · [speech](#speech) ·
-[camera](#camera) · [vision](#vision) · [face](#face) ·
+[listening](#listening) · [camera](#camera) · [vision](#vision) · [face](#face) ·
 [navigation](#navigation) · [llm](#llm) · [emergency](#emergency) ·
 [Recipes](#recipes)
 
@@ -29,6 +29,7 @@ Keys are never read from `config.yaml` and never printed.
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `name` | `"AIForUs Vision Assistant"` | Display name. |
+| `assistant_name` | `Nemo` | What the assistant is called and calls itself: the wake word ("Hai Nemo"), "Nemo siap", the LLM's persona. Letters and spaces, 2–20 characters. With the Vosk engine the name must be a word its English model knows; openWakeWord models must be retrained for a new name. |
 | `language` | `id` | Starting language: `id` or `en`. A language chosen by voice is remembered and wins; `--lang` wins over both. |
 | `data_dir` | `data` | Folder for `aiforus.db` (face embeddings, preferences). Relative paths are relative to the project root. Keep it private. |
 | `log_level` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR`. `--debug` forces `DEBUG`. |
@@ -47,6 +48,30 @@ Keys are never read from `config.yaml` and never printed.
 | `recognition_locale` | `id: id-ID`, `en: en-US` | Locale sent to speech recognition. |
 | `listen_timeout_s` | `5` | How long to wait for you to start speaking. |
 | `phrase_time_limit_s` | `10` | Longest single command. |
+
+## listening
+
+When the assistant listens in voice mode. `--text` is not affected. See
+[VOICE_COMMANDS.md](VOICE_COMMANDS.md#calling-nemo) for how it sounds.
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `mode` | `wake_word` | `wake_word`: say "Hai Nemo" or press the key. `push_to_talk`: press the key. `always`: every sentence is a command (the old behaviour; everything you say goes to speech recognition). If neither the wake word nor the key can start, it falls back to `always` and `--check` says so. |
+| `wake_engine` | `vosk` | `vosk`: works out of the box after `--download-models` (~40 MB English model); hears the name and "help". `openwakeword`: your trained models; also hears "tolong"/"darurat" — see [tools/wakeword](../tools/wakeword/README.md). Both run on this machine. |
+| `model_dir` | `models` | Vosk model in `models/vosk/`, openWakeWord models in `models/wakeword/`. |
+| `vosk_model` | `vosk-model-small-en-us-0.15` | Vosk model folder name (downloaded by `--download-models`). |
+| `vosk_greetings` | `[hi, hey, hello]` | English words the Vosk model hears for "hai"/"halo". |
+| `openwakeword_wake_model` | `hai_nemo.onnx` | Wake model file in `models/wakeword/`. |
+| `openwakeword_emergency_model` | `tolong.onnx` | Emergency model file; optional. |
+| `wake_threshold` | `0.5` | openWakeWord score (0–1) that counts as heard. Higher = fewer false wake-ups, lower = hears you more easily. |
+| `emergency_without_name` | `true` | "Tolong"/"Darurat" (openWakeWord) or "help" (Vosk) on its own triggers the emergency response. Only when said alone, followed by silence. |
+| `push_to_talk_key` | `space` | `space`, `enter` or `none`. Read from the console window, so it only works while that window has focus, on Windows for now. Also interrupts the assistant. |
+| `headset` | `false` | `true` when the microphone can't hear the speaker (headphones, glasses with bone conduction): the wake word may then interrupt the assistant too. With speakers keep `false`, or it would wake itself up. |
+| `beep` | `true` | A short *ting* when it starts listening. |
+| `end_silence_s` | `0.8` | Silence that ends a command (0.3–3). Raise it if it cuts you off mid-sentence. |
+
+Only the audio after the wake word or key press is sent to speech
+recognition; the wake word itself is detected on this machine.
 
 ## camera
 
