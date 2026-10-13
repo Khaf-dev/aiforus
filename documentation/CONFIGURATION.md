@@ -69,6 +69,7 @@ Keys are never read from `config.yaml` and never printed.
 | `ocr_confidence` | `0.5` | Minimum confidence for a text region. |
 | `max_objects_spoken` | `6` | Object groups spoken before "there are also N more". |
 | `max_text_regions_spoken` | `5` | Text regions read by "baca tulisan". |
+| `ocr_fallback` | `vlm` | When "baca tulisan" finds nothing: `vlm` looks again at the same photo with the vision model (if one is available), `hint` suggests saying "baca dokumen", `off` just says no text was found. |
 | `face_height_m` | `0.21` | Typical face box height, used to measure how far people are. See [calibrating](#calibrating-distances). |
 
 ## face
@@ -114,10 +115,10 @@ runs.
 | `enabled` | `true` | `true` | Both features on/off. |
 | `base_url` | `http://localhost:11434/v1` | empty (= OpenAI) | Any OpenAI-compatible endpoint. |
 | `model` | `gemma3:4b` | `gpt-4o-mini` | Model for general questions. |
-| `timeout_s` | `30` | `30` | Per question; CPU-only local models can be slow. |
+| `timeout_s` | `30` | `30` | Per question; CPU-only local models can be slow. Requests are not retried automatically (a retry would start over and double the wait). |
 | `max_tokens` | `200` | `200` | Answer length limit. |
 | `vision_model` | empty | empty | Model for images. Empty = same as `model` (it must then accept images). |
-| `vision_timeout_s` | `60` | `60` | Per image request. |
+| `vision_timeout_s` | `60` | `60` | Per image request, including loading the model on the first one. |
 | `vision_max_tokens` | `400` | `400` | Longer, for documents. |
 | `image_max_side` | `1024` | `1024` | Photos are downscaled so the longest side is at most this (256–4096). Smaller = faster, but small print gets harder to read. |
 | `allow_images_to_cloud` | `false` | `false` | Must be `true` before a photo may go to a non-local endpoint. Every such request is announced. |

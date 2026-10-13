@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- **Live preview** (`--preview`): a camera window with boxes and labels
+  ("kursi | jam 1 | ~2 m", names on faces), what was heard and said, and for
+  4 s after each reply the exact photo it was based on. One background
+  camera reader (`ContinuousCamera`) feeds the window and the assistant. The
+  assistant reports through a `Monitor` protocol, so a phone display can
+  replace the window later. Nothing is saved.
+- People are placed: *"Aku melihat 2 wajah. Kaffa di jam 12, sekitar 1 meter.
+  Orang yang belum aku kenal di jam 2, sekitar 3 meter."* Known people first,
+  nearest first; more than two strangers are counted.
+- When "baca tulisan" finds no text, the assistant looks again at the same
+  photo with the vision model (`vision.ocr_fallback: vlm`, default), or only
+  suggests "baca dokumen" (`hint`), or neither (`off`).
 - **Detailed vision with a vision-language model** (Fase 1B): "jelaskan
   lebih detail", "baca dokumen / surat / menu", and "lihat, <pertanyaan>"
   ("lihat, ini uang berapa?"). Uses the LLM endpoint (`llm.vision_model`,
@@ -61,6 +73,20 @@ All notable changes to this project are documented here. The format follows
   `all`, so it no longer tries to build dlib.
 
 ### Fixed
+- "ini siapa", "itu siapa", "siapa orang ini" now recognise faces instead of
+  going to the LLM (found in the first Windows field test).
+- Image requests use `llm.vision_timeout_s` and are not retried: the first
+  request (which loads the model) was cut off at the 30 s chat timeout and
+  sent again.
+- The vision model said "di 3 jam" ("in 3 hours"); the clock-direction
+  instruction is now written in the reply language ("di arah jam 3").
+- General answers: the LLM is told today's date, to warn that changing facts
+  (office holders, prices, news) may be out of date, and not to ask
+  follow-up questions.
+- The "sending the photo to the internet" notice could be spoken after the
+  answer; it is now always before it.
+- English: "I see 1 faces" → "I see one face".
+- A flaky speech-queue test (race in the fake TTS and in the test itself).
 - Console no longer shows comtypes cache logs and harmless torch warnings
   (still visible with `--debug`).
 - English "1 meters" → "1 meter".

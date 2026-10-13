@@ -44,7 +44,9 @@ The glasses themselves only need a camera, a microphone and a speaker.
 | `locales.py`, `i18n.py` | Every spoken sentence in `id` and `en`; a test enforces identical keys and placeholders. |
 | `storage.py` | SQLite via SQLAlchemy 2.0: face embeddings (raw float vectors) and preferences. |
 | `downloads.py` | Atomic downloads of Piper voices and face models into `models/`. |
-| `hal/` | Hardware adapters with lazy imports: camera, speech input, Piper / pyttsx3 output, IP location, Windows console. |
+| `hal/` | Hardware adapters with lazy imports: camera (on-demand, or `ContinuousCamera` reading on a background thread for the preview), speech input, Piper / pyttsx3 output, IP location, Windows console. |
+| `monitor.py` | What the assistant heard, saw and said, as plain data (`Mark`: box + label + kind). No drawing, no OpenCV. |
+| `preview.py` | `--preview`: draws marks on frames (`annotate`) and shows them in an OpenCV window on its own thread. |
 | `services/vision.py` | Fresh frame capture, "can't see" checks, YOLOv8 detection, EasyOCR. |
 | `services/spatial.py` | Detection → clock direction + rough distance. |
 | `services/faces.py` | Face detection, embeddings, matching; YuNet + SFace (default) or dlib. |
@@ -100,8 +102,12 @@ Accuracy is roughly ±30 %; everything is spoken with *about*. Calibration:
 | --- | --- | --- |
 | `CRITICAL` | Emergency (later: hazard alerts) | Interrupts whatever is playing and drops queued chatter |
 | `HIGH` | The direct answer to the last command | Normal answer |
-| `NORMAL` | Notices (e.g. "sending the photo to the internet") | |
-| `LOW` | Acknowledgements and hints ("Sebentar…") | Discarded once the real answer is ready |
+| `NORMAL` | Hints and follow-up notices | Can be cut off by an answer |
+| `LOW` | Acknowledgements ("Sebentar…") | Discarded once the real answer is ready |
+
+The privacy notice "sending the photo to the internet" is `HIGH`, queued
+before the answer: equal priorities never interrupt each other and play in
+order, so the answer can never jump ahead of the notice.
 
 ## Data flows and privacy
 
@@ -137,6 +143,27 @@ link-local IP address (`is_local_endpoint`).
 | **Typed config, secrets only from env** | Typos in `config.yaml` fail at startup; API keys never live in the repo. |
 | **Every sentence in `locales.py`** | Indonesian first, English kept in sync; a test enforces it. |
 
+## Live preview
+
+```
+ Assistant ──heard / said / answered(frame, marks)──► Monitor (protocol, monitor.py)
+                                                         └─ PreviewWindow (preview.py, own thread)
+ ContinuousCamera ──latest()──► PreviewWindow ──annotate()──► cv2.imshow
+        └──capture()──► VisionService (the assistant gets a frame taken after its request)
+```
+
+- The assistant only **reports** (`Monitor`), so another display — a phone
+  app later — can replace the window without touching the assistant. A
+  failing display is logged and ignored; it can never break an answer.
+- With `--preview` one `ContinuousCamera` thread reads the webcam and feeds
+  both the window and the assistant; without it the camera is read only on
+  demand (camera light off between commands).
+- Live detection is throttled (`PreviewWindow.DETECT_INTERVAL_S`, 0.3 s) and
+  shares the detector's lock with the assistant, which waits at most one
+  detection.
+- After each answer the exact photo it was based on is held on screen for
+  4 s with the marks the assistant used.
+
 ## Path to smart glasses
 
 The glasses become new `hal/` adapters — a camera that yields frames, a
@@ -158,6 +185,14 @@ it (`face.quantized: true`).
   measurements.
 - Vision-language models can hallucinate (wrong numbers, invented text).
   Answers about money or medicine must be double-checked.
+- A local LLM only knows its training data (it named the previous
+  Indonesian president in a test). It is given today's date and told to warn
+  that changing facts may be out of date; live information (web search) is
+  a separate, planned feature.
+- EasyOCR misses small, distant or stylised text; "baca tulisan" then falls
+  back to the vision model (`vision.ocr_fallback`).
+- The preview window is not supported on macOS yet (OpenCV windows must run
+  on the main thread there).
 - With the default PyTorch install (CPU-only on Windows) YOLO and EasyOCR
   run on the CPU; using the GPU (CUDA build of PyTorch, VRAM shared with
   Ollama) is planned.

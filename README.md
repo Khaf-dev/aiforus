@@ -33,8 +33,9 @@ headphones.
 | Spoken replies | ✅ | Offline neural TTS ([Piper](https://github.com/OHF-Voice/piper1-gpl)) with a natural Indonesian voice, pyttsx3 fallback; prioritised and interruptible |
 | Describe surroundings (fast) | ✅ | YOLOv8n on this machine, with clock directions and rough distance: *"Kursi di jam 1, sekitar 2 meter."* |
 | Detailed description, documents, questions about the image | ✅ optional | Vision-language model, local by default (Ollama `gemma3:4b`): *"jelaskan lebih detail"*, *"baca dokumen"*, *"lihat, ini uang berapa?"* |
-| Read short text | ✅ | EasyOCR (Indonesian + English), reading order |
-| Recognise people | ✅ | Enroll by voice (3 samples per command); YuNet + SFace — small ONNX models that also run on edge devices; stored locally |
+| Read short text | ✅ | EasyOCR (Indonesian + English), reading order; falls back to the vision model when it finds nothing |
+| Recognise people | ✅ | Enroll by voice (3 samples per command); answers with names, clock direction and distance; YuNet + SFace — small ONNX models that also run on edge devices; stored locally |
+| Live preview for developers | ✅ optional | `--preview`: camera window with boxes, labels, and what was heard and said |
 | General questions | ✅ optional | Any OpenAI-compatible LLM: local and free with Ollama, or a hosted provider |
 | Walking directions | ⚠️ demo | Nominatim + OSRM, turn-by-turn; start point from IP (kilometres off) |
 | Emergency | ⚠️ partial | Immediate spoken guidance + approximate location; does **not** send alerts yet |
@@ -46,8 +47,9 @@ headphones.
 You:  "apa di depan"
 AIForUs: "Orang di jam 11, sekitar 1,5 meter. Kursi di jam 1, sekitar 2 meter."
 
-You:  "siapa ini"
-AIForUs: "Aku melihat 1 wajah. Yang aku kenal: Budi."
+You:  "ini siapa"
+AIForUs: "Aku melihat 2 wajah. Budi di jam 12, sekitar 1,5 meter.
+          Orang yang belum aku kenal di jam 2, sekitar 3 meter."
 
 You:  "lihat, ini uang berapa?"
 AIForUs: "Sebentar, aku perhatikan dulu."  …  (the vision model's answer, a few seconds later)
@@ -139,10 +141,28 @@ python -m aiforus --text           # type commands, hear replies
 python -m aiforus --text --mute    # type commands, read replies (no audio)
 python -m aiforus --lang en        # English
 python -m aiforus --check          # component report, then exit
+python -m aiforus --preview        # live camera window (see below)
 python -m aiforus --debug          # verbose logs
 ```
 
 `python app.py` still works and does the same as `python -m aiforus`.
+
+### Live preview (`--preview`)
+
+A window for developers, demos and sighted helpers — the assistant works the
+same without it, and nothing is saved:
+
+- **LANGSUNG / LIVE** — the camera with boxes from a light detection loop
+  (about 3 times a second): objects with clock direction and distance, faces
+  with names.
+- **FOTO JAWABAN TERAKHIR / PHOTO OF THE LAST ANSWER** — for 4 seconds after
+  each reply, the exact photo the reply was based on, with the same marks,
+  so you can check what was *said* against what was *seen*.
+- At the bottom: what it heard and what it is saying.
+
+Press **q** or **Esc** in the window (or close it) to hide it; the assistant
+keeps running. Needs `opencv-python` with GUI support (the `vision` extra)
+and works on Windows and Linux desktops.
 
 Commands at a glance (full list with English:
 [documentation/VOICE_COMMANDS.md](documentation/VOICE_COMMANDS.md)):
@@ -156,7 +176,7 @@ Commands at a glance (full list with English:
 | Read a letter, menu or label | "baca dokumen", "bacakan menu" |
 | Ask about what the camera sees | "lihat, baju ini warna apa?" |
 | Read short text | "baca tulisan" |
-| Know who's there | "siapa ini" |
+| Know who's there | "siapa ini", "ini siapa" |
 | Save someone's face | "kenali wajah sebagai Budi" |
 | Stop talking | "diam" |
 | Turn it off | "matikan asisten", then "ya" |
@@ -222,7 +242,8 @@ recipes for:
 | Windows: nothing happens until you press Enter | Fixed in the current version (console QuickEdit is disabled while running). Update. |
 | `LLM server NOT reachable` | Start Ollama (`ollama serve` or the tray app) and `ollama pull gemma3:4b` |
 | `detailed vision (VLM) blocked` | The endpoint is in the cloud; set `llm.allow_images_to_cloud: true` only if you accept sending photos |
-| Distances are consistently off | [Calibrate](documentation/CONFIGURATION.md#calibrating-distances) `vision.face_height_m` / `camera.horizontal_fov_deg` |
+| Distances are consistently off | [Calibrate](documentation/CONFIGURATION.md#calibrating-distances) `vision.face_height_m` / `camera.horizontal_fov_deg` — `--preview` shows what each box was measured as |
+| The LLM gets current facts wrong (e.g. who is president) | A local model only knows its training data; it now says its information may be out of date. Live information (web search) is on the roadmap. |
 
 More: [documentation/TROUBLESHOOTING.md](documentation/TROUBLESHOOTING.md).
 

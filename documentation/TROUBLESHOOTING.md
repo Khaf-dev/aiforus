@@ -48,6 +48,7 @@ logs.
 | The first "apa di depan" / "baca tulisan" is slow | YOLO and EasyOCR load (and on first use download) their models. Later requests are faster. |
 | Objects missed or wrong | Raise or lower `vision.detection_confidence`; a larger model (`yolov8s.pt`) is more accurate but slower. |
 | Distances consistently too large / small | [Calibrate](CONFIGURATION.md#calibrating-distances) `camera.horizontal_fov_deg` and `vision.face_height_m`. Expect roughly ±30 % anyway. |
+| You want to see what the assistant "sees" | Run with `--preview`: live boxes with labels, and the exact photo behind each answer. |
 | A close person is *"sangat dekat"* with no number | Their body is cut off and no face is visible (facing away, too close). Expected; depth estimation is planned. |
 
 ## Faces
@@ -72,7 +73,18 @@ logs.
 | *"Penjelasan detail belum tersedia"* | Same as above: no usable vision model. Check `--check`. |
 | *"model penglihatan tidak bisa dihubungi atau terlalu lama menjawab"* | Server stopped, or slower than `llm.vision_timeout_s` (60 s). Run `ollama ps`: `100% GPU` is fast, a CPU share is slow. Close other GPU-heavy apps, lower `llm.image_max_side`, or raise the timeout. The first request after starting also loads the model. |
 | The model answers wrongly or invents text | Vision-language models can hallucinate. Use the fast commands for objects/text, and double-check money, medicine and anything important. |
+| Wrong answers about current events ("presidennya Joko Widodo") | The local model only knows its training data. It is told today's date and to warn that its information may be outdated, but it can still be wrong. Live information (web search) is planned. |
+| Log shows `Retrying request` | Fixed: requests are no longer retried; image requests use `llm.vision_timeout_s`. Update. |
 | An image model error like "does not support images" | `llm.model` is text-only. Set `llm.vision_model` to a model that accepts images (e.g. `gemma3:4b`). |
+
+## Live preview (`--preview`)
+
+| Symptom | Fix |
+| --- | --- |
+| Log: `Preview window unavailable` | `opencv-python-headless` has no window support: `pip uninstall opencv-python-headless` then `pip install "opencv-python>=4.8,<5"`. A desktop session is needed (not SSH). |
+| macOS: no window | OpenCV windows must run on the main thread on macOS; the preview is supported on Windows and Linux for now. |
+| The laptop gets warm / fans spin | The preview runs object and face detection about 3 times a second. Close the window (q) when you don't need it; the assistant itself only detects when asked. |
+| `--preview needs a camera` | No camera was found; see [Camera and seeing](#camera-and-seeing). |
 
 ## Navigation
 

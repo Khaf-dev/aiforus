@@ -51,6 +51,11 @@ The answer uses **clock directions** (12 = straight ahead, 3 = right,
 - Under 1 meter is said as *"kurang dari 1 meter"*.
 - If the camera is dark or covered the assistant says it **can't see** —
   never that nothing is there.
+- If **"baca tulisan"** finds nothing (small, distant or stylised text such
+  as a shop sign), the assistant says so and looks again at the same photo
+  with the vision model: *"Tulisannya tidak terbaca dengan cara cepat. Aku
+  coba lihat lebih teliti."* With `vision.ocr_fallback: hint` it only
+  suggests saying "baca dokumen"; `off` disables both.
 
 ## Seeing — detailed (vision-language model)
 
@@ -67,7 +72,7 @@ Needs the LLM settings (local Ollama by default, see
 - *Document* words that switch "baca …" to the detailed reader: dokumen,
   surat, menu, kertas, halaman, label, resep, struk, kemasan, buku, brosur
   (English: document, letter, menu, page, label, receipt, prescription,
-  package, book). Plain "baca tulisan" stays on the fast OCR.
+  package, book). Plain "baca tulisan" tries the fast OCR first.
 - A question must **start** with *lihat* / *look*: "lihat, …".
   "lihat sekitar" is the fast scene description.
 - The model is told to describe only what is visible, say when something is
@@ -82,11 +87,17 @@ Needs the LLM settings (local Ollama by default, see
 
 | What | Bahasa Indonesia | English |
 | --- | --- | --- |
-| Who is here | "siapa ini", "ada siapa" | "who is this", "who's there" |
+| Who is here | "siapa ini", "ini siapa", "siapa orang ini", "ada siapa" | "who is this", "who's there" |
 | Save a face | "kenali wajah sebagai Budi" | "enroll face as Budi", "register face as Budi" |
 | Known people | "siapa saja yang kamu kenal" | "who do you know" |
 | Delete a face | "lupakan Budi", "hapus wajah Budi" | "forget Budi" |
 
+- The answer says where each person is, known people first, nearest first:
+  *"Aku melihat 2 wajah. Kaffa di jam 12, sekitar 1 meter. Orang yang belum
+  aku kenal di jam 2, sekitar 3 meter."* More than two strangers are only
+  counted ("3 orang belum aku kenal").
+- "ini siapa" counts as this command only as the whole question; "ini siapa
+  yang bikin lagunya?" is a general question.
 - Enrollment needs **exactly one face** in view. It keeps looking for up to
   4 seconds and saves 3 samples from different frames
   (`face.enroll_samples`, `face.enroll_timeout_s`). Saying it again for the
@@ -116,5 +127,10 @@ both.
 Anything else — *"apa ibu kota Jepang"*, *"berapa 15 kali 12"* — goes to the
 LLM (local Ollama by default, or any OpenAI-compatible provider; see
 [CONFIGURATION.md](CONFIGURATION.md#llm)). Answers are kept to a few short
-sentences. The LLM can't see the camera in this mode; for that use
-"lihat, …". It is never used to decide which command to run.
+sentences, without follow-up questions. The LLM can't see the camera in
+this mode; for that use "lihat, …". It is never used to decide which
+command to run.
+
+A local model only knows what was in its training data. It is told today's
+date and to say when its information may be out of date (who holds an
+office, prices, news) — but it can still be wrong about recent events.
