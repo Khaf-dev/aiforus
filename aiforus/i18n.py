@@ -5,7 +5,15 @@ from __future__ import annotations
 import logging
 
 from .config import SUPPORTED_LANGUAGES
-from .locales import COCO_LABELS_ID, EN_IRREGULAR_PLURALS, MESSAGES
+from .locales import COCO_LABELS_ID, EN_IRREGULAR_PLURALS, MESSAGES, OBJECT_SYNONYMS
+
+_ID_NAME_TO_LABEL = {name: label for label, name in COCO_LABELS_ID.items()}
+_EN_PLURAL_TO_LABEL = {plural: label for label, plural in EN_IRREGULAR_PLURALS.items()}
+# Filler words around an object name: "sebuah kursi", "a chair", "kursi-kursi".
+_FILLERS = {
+    "id": ("sebuah", "seekor", "satu", "beberapa", "yang", "si"),
+    "en": ("a", "an", "any", "the", "some"),
+}
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +69,40 @@ class Translator:
             return COCO_LABELS_ID.get(coco_label, coco_label)
         return coco_label
 
+    def object_name(self, name: str) -> str:
+        """The object name without filler words: "any buses" -> "buses"."""
+        words = name.lower().replace("-", " ").split()
+        while words and words[0] in _FILLERS[self._language]:  # only leading: "on the table" stays
+            words.pop(0)
+        return " ".join(words) or name.strip()
+
+    def find_labels(self, name: str) -> tuple[str, ...]:
+        """COCO labels for an object name the user said ("motor" ->
+        motorcycle). Empty when the detector doesn't know the object."""
+        text = self.object_name(name)
+        words = text.split()
+        if self._language == "id":
+            words_once = list(dict.fromkeys(words))  # "kursi kursi" -> "kursi"
+            candidates = [text, " ".join(words_once)]
+        else:
+            candidates = [text]
+            if text.endswith("es"):
+                candidates.append(text[:-2])
+            if text.endswith("s"):
+                candidates.append(text[:-1])
+        synonyms = OBJECT_SYNONYMS.get(self._language, {})
+        for candidate in candidates:
+            if candidate in synonyms:
+                return synonyms[candidate]
+            if self._language == "id" and candidate in _ID_NAME_TO_LABEL:
+                return (_ID_NAME_TO_LABEL[candidate],)
+            if self._language == "en":
+                if candidate in COCO_LABELS_ID:
+                    return (candidate,)
+                if candidate in _EN_PLURAL_TO_LABEL:
+                    return (_EN_PLURAL_TO_LABEL[candidate],)
+        return ()
+
     def count_label(self, coco_label: str, count: int) -> str:
         """``2 orang`` / ``2 people``."""
         if self._language == "id":
@@ -78,8 +120,27 @@ class Translator:
             text = text.split(".")[0]
         return text.replace(".", ",") if self._language == "id" else text
 
+    def approx_distance(self, meters: float) -> str:
+        """Rounded for speech: "kurang dari 1 meter", "1,5 meter", "4 meter"."""
+        if meters < 1.0:
+            return self.t("distance_under_1m")
+        if meters < 3.0:
+            return self._meters(self.number(round(meters * 2) / 2))
+        if meters < 20.0:
+            return self._meters(int(round(meters)))
+        return self.distance(meters)
+
+    def _meters(self, value: object) -> str:
+        if self._language == "en" and str(value) == "1":
+            return "1 meter"
+        return self.t("unit_meters", value=value)
+
+    @staticmethod
+    def capitalize(text: str) -> str:
+        return text[:1].upper() + text[1:]
+
     def distance(self, meters: float) -> str:
         if meters < 1000:
             rounded = max(10, int(round(meters / 10.0)) * 10) if meters >= 5 else int(round(meters))
-            return self.t("unit_meters", value=rounded)
+            return self._meters(rounded)
         return self.t("unit_kilometers", value=self.number(meters / 1000.0))

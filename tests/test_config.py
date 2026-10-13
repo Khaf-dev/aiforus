@@ -7,7 +7,7 @@ from aiforus.config import DEFAULT_CONFIG_PATH, PROJECT_ROOT, load_settings
 def test_repo_config_is_valid():
     settings = load_settings(DEFAULT_CONFIG_PATH, environ={})
     assert settings.app.language == "id"
-    assert settings.openai_api_key is None
+    assert settings.llm_api_key is None
 
 
 def test_unknown_key_fails_loudly(tmp_path):
@@ -26,9 +26,11 @@ def test_api_key_comes_from_environment_only(tmp_path):
     cfg = tmp_path / "config.yaml"
     cfg.write_text("app:\n  language: en\n", encoding="utf-8")
     settings = load_settings(cfg, environ={"OPENAI_API_KEY": "sk-test"})
-    assert settings.openai_api_key.get_secret_value() == "sk-test"
+    assert settings.llm_api_key.get_secret_value() == "sk-test"
     assert "sk-test" not in repr(settings)
-    assert "openai_api_key" not in settings.model_dump()
+    assert "llm_api_key" not in settings.model_dump()
+    generic = load_settings(cfg, environ={"OPENAI_API_KEY": "sk-openai", "LLM_API_KEY": "gsk-other"})
+    assert generic.llm_api_key.get_secret_value() == "gsk-other"
 
 
 def test_overrides_and_relative_data_dir():

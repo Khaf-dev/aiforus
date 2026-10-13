@@ -74,6 +74,11 @@ class CameraSettings(_Section):
     dark_threshold: float = Field(25.0, ge=0, le=255)
     # Below this pixel standard deviation the lens is likely covered.
     blank_std_threshold: float = Field(6.0, ge=0)
+    # Horizontal field of view of the camera. Used to turn image positions into
+    # clock directions and box sizes into distances. Typical webcams: 60-78;
+    # wide glasses cameras: ~110-120. If distances are consistently off,
+    # adjust this.
+    horizontal_fov_deg: float = Field(70.0, ge=20.0, le=170.0)
 
 
 class VisionSettings(_Section):
@@ -83,15 +88,38 @@ class VisionSettings(_Section):
     ocr_confidence: float = Field(0.5, ge=0.0, le=1.0)
     max_objects_spoken: int = Field(6, ge=1)
     max_text_regions_spoken: int = Field(5, ge=1)
+    # What "baca tulisan" does when the quick OCR finds nothing (it misses
+    # small, distant or stylised text that a vision model can still read):
+    # vlm  = look again with the vision model, if one is available
+    # hint = suggest saying "baca dokumen"
+    # off  = just say no text was found
+    ocr_fallback: Literal["vlm", "hint", "off"] = "vlm"
+    # Typical height of a detected face box (forehead to chin), used to
+    # estimate how far away a person is from the size of their face. Works
+    # even when their body is cut off by the frame. Calibrate if needed.
+    face_height_m: float = Field(0.21, gt=0.1, lt=0.4)
 
 
 class FaceSettings(_Section):
     enabled: bool = True
-    detection_model: Literal["hog", "cnn"] = "hog"
-    # Euclidean distance between 128-d dlib encodings. face_recognition's
-    # default tolerance is 0.6; lower is stricter (fewer false matches).
-    match_threshold: float = Field(0.55, gt=0.0, le=1.0)
+    # opencv: YuNet detector + SFace recogniser (small ONNX models that also run
+    #         on Raspberry Pi, Jetson and phones). Needs only OpenCV.
+    # dlib:   the face_recognition library (needs a C++ build; desktop only).
+    backend: Literal["opencv", "dlib"] = "opencv"
+    # int8 models are ~4x smaller and faster on edge devices, slightly less accurate.
+    quantized: bool = False
+    model_dir: Path = Path("models/opencv")
+    detection_confidence: float = Field(0.8, gt=0.0, lt=1.0)  # opencv only
+    detection_model: Literal["hog", "cnn"] = "hog"  # dlib only
+    # Max Euclidean distance between embeddings to count as the same person.
+    # Empty = the backend's recommended value (SFace 1.128 on unit vectors,
+    # i.e. cosine similarity >= 0.363; dlib 0.55). Lower is stricter.
+    match_threshold: float | None = Field(None, gt=0.0, le=2.0)
     max_samples_per_person: int = Field(10, ge=1, le=100)
+    # One "kenali wajah" command collects this many samples from different
+    # frames (angles/lighting vary slightly), trying for up to the timeout.
+    enroll_samples: int = Field(3, ge=1, le=10)
+    enroll_timeout_s: float = Field(4.0, gt=0.0, le=20.0)
 
 
 class NavigationSettings(_Section):
@@ -110,9 +138,22 @@ class NavigationSettings(_Section):
 
 class LLMSettings(_Section):
     enabled: bool = True
+    # Any OpenAI-compatible chat endpoint. Empty = OpenAI itself.
+    # Local and free, works offline: Ollama -> "http://localhost:11434/v1"
+    base_url: str | None = None
     model: str = "gpt-4o-mini"
-    timeout_s: float = Field(15.0, gt=0)
+    # Local models on a CPU can take a while to answer.
+    timeout_s: float = Field(30.0, gt=0)
     max_tokens: int = Field(200, ge=16)
+    # Vision-language model for detailed descriptions, documents and
+    # questions about the camera image. Empty = same as `model`.
+    vision_model: str | None = None
+    vision_timeout_s: float = Field(60.0, gt=0)
+    vision_max_tokens: int = Field(400, ge=16)
+    image_max_side: int = Field(1024, ge=256, le=4096)
+    # Camera images never leave the machine unless this is true. Local
+    # endpoints (localhost / private network) are always allowed.
+    allow_images_to_cloud: bool = False
 
 
 class EmergencySettings(_Section):
@@ -133,7 +174,8 @@ class Settings(_Section):
     emergency: EmergencySettings = Field(default_factory=EmergencySettings)
 
     # Secrets never come from config.yaml.
-    openai_api_key: SecretStr | None = Field(default=None, exclude=True)
+    # From LLM_API_KEY (any provider) or OPENAI_API_KEY.
+    llm_api_key: SecretStr | None = Field(default=None, exclude=True)
 
     @property
     def data_dir(self) -> Path:
@@ -143,6 +185,11 @@ class Settings(_Section):
     @property
     def database_path(self) -> Path:
         return self.data_dir / "aiforus.db"
+
+    @property
+    def face_model_dir(self) -> Path:
+        path = self.face.model_dir
+        return path if path.is_absolute() else PROJECT_ROOT / path
 
     @property
     def piper_dir(self) -> Path:
@@ -197,7 +244,7 @@ def load_settings(
         data = _deep_merge(data, overrides)
 
     settings = Settings.model_validate(data)
-    api_key = environ.get("OPENAI_API_KEY", "").strip()
+    api_key = (environ.get("LLM_API_KEY") or environ.get("OPENAI_API_KEY") or "").strip()
     if api_key:
-        settings.openai_api_key = SecretStr(api_key)
+        settings.llm_api_key = SecretStr(api_key)
     return settings

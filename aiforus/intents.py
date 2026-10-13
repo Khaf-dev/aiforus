@@ -40,7 +40,12 @@ class IntentType(str, Enum):
     RECOGNIZE_FACES = "recognize_faces"
     READ_TEXT = "read_text"
     DETECT_OBJECTS = "detect_objects"
+    COUNT_OBJECTS = "count_objects"
+    FIND_OBJECT = "find_object"
     DESCRIBE_SCENE = "describe_scene"
+    DESCRIBE_DETAIL = "describe_detail"
+    READ_DOCUMENT = "read_document"
+    VISUAL_QUESTION = "visual_question"
     NEXT_DIRECTION = "next_direction"
     REPEAT_DIRECTION = "repeat_direction"
     NAVIGATE = "navigate"
@@ -173,15 +178,52 @@ _RULES: list[tuple[IntentType, re.Pattern[str]]] = [
         IntentType.RECOGNIZE_FACES,
         _rx(
             r"\b(?:siapa (?:ini|itu|dia|di depan(?: saya| aku| ku)?|yang ada di depan|di sini|di sana)"
+            r"|siapa (?:orang|pria|wanita|perempuan|laki-laki|cowok|cewek|bapak|ibu|mas|mbak)(?:nya)?"
+            r" (?:ini|itu|tersebut|di depan)"
+            # "ini siapa?" - only as the whole question, so "ini siapa yang
+            # bikin?" stays a general question.
+            r"|^(?:ini|itu|dia|orang ini|orang itu)(?: itu)? siapa(?: ya)?$"
             r"|ada siapa(?: saja)?|kenali (?:orang|wajah)(?: ini| di depan)?$|wajah siapa"
             r"|who(?: is|'s) (?:this|that|here|there|in front)|recognize (?:faces|people|this person)"
             r"|identify (?:the |this )?(?:person|people|faces))\b"
+        ),
+    ),
+    # Vision-language model commands come before the quick YOLO/OCR ones
+    # because they are more specific ("gambarkan *detail*", "baca *dokumen*").
+    (
+        IntentType.DESCRIBE_DETAIL,
+        _rx(
+            r"\b(?:jelaskan|gambarkan|deskripsikan|ceritakan|lihat)\b.*\b(?:detail|lebih detail|lengkap|rinci|secara rinci)\b"
+            r"|\b(?:describe|tell me about)\b.*\b(?:in detail|in more detail|detailed)\b|\bmore detail\b"
+        ),
+    ),
+    (
+        IntentType.READ_DOCUMENT,
+        _rx(
+            r"\b(?:baca|bacakan|bacain|membaca)\b.*\b(?:dokumen|surat|menu|kertas|halaman|label|resep|struk|kemasan|buku|brosur)\b"
+            r"|\bread\b.*\b(?:document|letter|menu|page|label|receipt|prescription|package|book)\b"
         ),
     ),
     (
         IntentType.READ_TEXT,
         _rx(
             r"\b(?:baca|bacakan|bacain|membaca|apa tulisannya|tulisannya apa|tulisan apa|read|what does (?:it|this|that) say)\b"
+        ),
+    ),
+    # "ada berapa orang?" - only as the whole question, so "berapa orang yang
+    # tinggal di Jakarta?" stays a general question.
+    (
+        IntentType.COUNT_OBJECTS,
+        _rx(
+            r"^(?:ada )?berapa (?:banyak )?(?P<what>orang|benda)"
+            r"(?: (?:di (?:depan|sekitar|sini)(?: saya| aku| ku)?|yang ada(?: di depan)?))?$"
+        ),
+    ),
+    (
+        IntentType.COUNT_OBJECTS,
+        _rx(
+            r"^how many (?P<what>people|persons|objects|things)(?: are)?"
+            r"(?: (?:here|there|in front(?: of me)?|around(?: me)?))?$"
         ),
     ),
     (
@@ -239,10 +281,31 @@ _RULES: list[tuple[IntentType, re.Pattern[str]]] = [
     (
         IntentType.SOUND,
         _rx(
-            r"\b(?:apa yang kamu dengar|suara apa|dengarkan(?: sekitar)?|ada rintangan|cek (?:jalan|depan)"
+            r"\b(?:apa yang kamu dengar|suara apa|dengarkan(?: sekitar)?"
+            r"|ada (?:rintangan|halangan|hambatan|lubang)|cek (?:jalan|depan)"
             r"|what do you hear|what sound|detect sounds|listen around|check ahead|any obstacles?|obstacles?)\b"
         ),
     ),
+    # "apakah ada sepeda motor di depan?" - after the obstacle rule above, so
+    # "ada rintangan?" keeps the honest "not available" answer.
+    (
+        IntentType.FIND_OBJECT,
+        _rx(
+            r"^(?:apakah |apa )?ada (?!apa\b|siapa\b|berapa\b)(?P<thing>.+?)"
+            r"(?: (?:di (?:depan|sekitar|sini|sana)(?: saya| aku| ku)?|ya|nggak|ngga|gak|ga|enggak|tidak))*$"
+        ),
+    ),
+    (
+        IntentType.FIND_OBJECT,
+        _rx(
+            r"^(?:is there|are there|do you see|can you see) (?P<thing>.+?)"
+            r"(?: (?:in front(?: of me)?|here|around(?: me)?|ahead))?$"
+        ),
+    ),
+    # "lihat, ini uang berapa?" — a question about what the camera sees.
+    # Last, so obstacle questions above get the honest "not available" answer
+    # instead of a vision model's guess.
+    (IntentType.VISUAL_QUESTION, _rx(r"^(?:lihat|look|lihatlah|tolong lihat)\s+(?P<question>.+)$")),
 ]
 
 _LANGUAGE_CODES = {
@@ -291,6 +354,12 @@ class IntentRouter:
         if intent_type is IntentType.NAVIGATE:
             dest = groups.get("dest")
             return {"destination": dest} if dest else {}
+        if intent_type is IntentType.FIND_OBJECT:
+            return {"thing": groups.get("thing", "")}
+        if intent_type is IntentType.COUNT_OBJECTS:
+            return {"label": "person"} if groups.get("what") in ("orang", "people", "persons") else {}
+        if intent_type is IntentType.VISUAL_QUESTION:
+            return {"question": groups.get("question", "")}
         if intent_type in (IntentType.ENROLL_FACE, IntentType.FORGET_FACE):
             name = groups.get("name")
             return {"name": name} if name else {}

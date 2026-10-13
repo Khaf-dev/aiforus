@@ -1,7 +1,8 @@
 # AIForUs configuration (non-secret settings only).
-# Secrets such as OPENAI_API_KEY go in the environment or a .env file.
+# Secrets such as LLM_API_KEY go in the environment or a .env file.
 # Unknown keys are rejected at startup, so typos fail loudly.
 # Every key is optional; the defaults live in aiforus/config.py.
+# Reference for every key: documentation/CONFIGURATION.md
 
 app:
   name: "AIForUs Vision Assistant"
@@ -23,7 +24,7 @@ speech:
     en: "en-US"
   # Voice engine: auto (Piper if installed and downloaded, else pyttsx3) | piper | pyttsx3
   engine: "auto"
-  # Piper voices per language; download with: python -m aiforus --download-voices
+  # Piper voices per language; download with: python -m aiforus --download-models
   piper_voices:
     id: "id_ID-news_tts-medium"
     en: "en_US-lessac-medium"
@@ -37,6 +38,7 @@ camera:
   flush_frames: 4         # discard buffered frames so captures are fresh
   dark_threshold: 25      # mean brightness below this = "too dark"
   blank_std_threshold: 6  # pixel std below this = "lens covered"
+  horizontal_fov_deg: 70  # camera field of view; drives clock directions and distances
 
 vision:
   detector_model: "yolov8n.pt"
@@ -45,12 +47,25 @@ vision:
   ocr_confidence: 0.5
   max_objects_spoken: 6
   max_text_regions_spoken: 5
+  # When "baca tulisan" finds nothing: vlm (look again with the vision model),
+  # hint (suggest "baca dokumen") or off
+  ocr_fallback: "vlm"
+  face_height_m: 0.21     # typical face box height; used to measure how far people are
 
 face:
   enabled: true
-  detection_model: "hog"  # hog (fast, CPU) | cnn (accurate, needs GPU)
-  match_threshold: 0.55   # lower = stricter matching
+  # opencv: YuNet + SFace, small ONNX models that also run on Raspberry Pi,
+  #         Jetson and phones (download with: python -m aiforus --download-models)
+  # dlib:   face_recognition library (pip install -e .[faces]; desktop only)
+  backend: "opencv"
+  quantized: false        # true = int8 models (~10 MB instead of ~39 MB) for edge devices
+  model_dir: "models/opencv"
+  detection_confidence: 0.8
+  detection_model: "hog"  # dlib only: hog (fast, CPU) | cnn (accurate, needs GPU)
+  # match_threshold: 1.128  # max embedding distance; empty = backend default (lower = stricter)
   max_samples_per_person: 10
+  enroll_samples: 3       # samples saved per "kenali wajah" command (from different frames)
+  enroll_timeout_s: 4     # how long enrollment keeps trying to see exactly one face
 
 navigation:
   enabled: true
@@ -62,10 +77,20 @@ navigation:
   walking_speed_mps: 1.2
 
 llm:
-  enabled: true           # needs OPENAI_API_KEY; used only for general questions
-  model: "gpt-4o-mini"
-  timeout_s: 15
+  enabled: true           # general questions and detailed vision; never used for commands
+  # Any OpenAI-compatible endpoint. Empty = OpenAI (needs LLM_API_KEY / OPENAI_API_KEY).
+  # Default: local Ollama (free, offline). Pull the model first: ollama pull gemma3:4b
+  base_url: "http://localhost:11434/v1"
+  model: "gemma3:4b"      # multilingual (incl. Indonesian) and can see images
+  timeout_s: 30           # local models on a CPU can be slow
   max_tokens: 200
+  # Detailed descriptions, documents and "lihat, ..." questions.
+  vision_model:           # empty = same as model
+  vision_timeout_s: 60
+  vision_max_tokens: 400
+  image_max_side: 1024    # photos are downscaled before sending (faster)
+  # Camera images never leave this machine unless this is true.
+  allow_images_to_cloud: false
 
 emergency:
   contacts: []            # sending alerts is not implemented yet

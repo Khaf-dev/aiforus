@@ -3,7 +3,7 @@ import pytest
 
 from aiforus.services.faces import EnrollStatus, FaceService, normalize_name
 from aiforus.storage import Database, PreferenceStore, SqlFaceStore
-from tests.fakes import textured_frame
+from tests.fakes import centered_boxes, textured_frame
 
 
 class FakeEncoder:
@@ -12,6 +12,9 @@ class FakeEncoder:
 
     def encode(self, frame):
         return list(self.next)
+
+    def encode_faces(self, frame):
+        return list(zip(centered_boxes(frame, len(self.next)), self.next, strict=True))
 
 
 def vec(*values):
@@ -77,6 +80,7 @@ def test_enroll_then_identify(faces):
     encoder.next = [vec(1.1), vec(5.0)]  # Budi (close) and a stranger (far)
     matches = service.identify(textured_frame())
     assert [m.name for m in matches] == ["Budi Santoso", None]
+    assert all(m.box is not None for m in matches)  # so the assistant can say where
 
 
 def test_enroll_refuses_multiple_faces_and_no_face(faces):
@@ -118,3 +122,21 @@ def test_identify_with_no_known_people(faces):
 )
 def test_normalize_name(raw, expected):
     assert normalize_name(raw) == expected
+
+
+def test_single_face_and_add_samples(faces):
+    service, encoder = faces
+    encoder.next = []
+    assert service.single_face(textured_frame()) == (EnrollStatus.NO_FACE, None)
+    encoder.next = [vec(1), vec(2)]
+    assert service.single_face(textured_frame())[0] is EnrollStatus.MULTIPLE_FACES
+    encoder.next = [vec(1)]
+    status, encoding = service.single_face(textured_frame())
+    assert status is EnrollStatus.OK and encoding[0] == 1
+
+    # max_samples_per_person=2 in this fixture: the third sample is dropped
+    result = service.add_samples("ani", [vec(1), vec(1.1), vec(1.2)])
+    assert (result.status, result.name, result.samples) == (EnrollStatus.OK, "Ani", 2)
+    assert service.add_samples("ani", [vec(1)]).status is EnrollStatus.FULL
+    assert service.add_samples("  ", [vec(1)]).status is EnrollStatus.INVALID_NAME
+    assert service.add_samples("budi", []).status is EnrollStatus.NO_FACE

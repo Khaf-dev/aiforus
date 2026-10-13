@@ -39,6 +39,34 @@ T = IntentType
         ("what does it say", T.READ_TEXT),
         # Faces
         ("siapa ini", T.RECOGNIZE_FACES),
+        # Found in the Windows test: "ini siapa" went to the LLM.
+        ("ini siapa", T.RECOGNIZE_FACES),
+        ("Itu siapa?", T.RECOGNIZE_FACES),
+        ("dia siapa ya", T.RECOGNIZE_FACES),
+        ("siapa orang ini", T.RECOGNIZE_FACES),
+        ("siapa pria tersebut", T.RECOGNIZE_FACES),  # Windows test: went to the LLM
+        ("siapa perempuan itu", T.RECOGNIZE_FACES),
+        ("orang itu siapa", T.RECOGNIZE_FACES),
+        ("ini siapa yang bikin lagunya", T.GENERAL_QUESTION),
+        # Second Windows test: counting people went to the LLM.
+        ("ada berapa orang", T.COUNT_OBJECTS),
+        ("berapa orang di depan saya", T.COUNT_OBJECTS),
+        ("berapa banyak benda", T.COUNT_OBJECTS),
+        ("how many people are in front of me", T.COUNT_OBJECTS),
+        ("berapa orang yang tinggal di jakarta", T.GENERAL_QUESTION),
+        # "apakah ada <benda>?" - fourth Windows test
+        ("apakah ada sepeda motor di depan?", T.FIND_OBJECT),
+        ("ada motor nggak", T.FIND_OBJECT),
+        ("ada kursi di sekitar saya ya", T.FIND_OBJECT),
+        ("is there a chair in front of me", T.FIND_OBJECT),
+        ("do you see my phone", T.FIND_OBJECT),
+        # ...without stealing other commands
+        ("ada apa di depan", T.DESCRIBE_SCENE),
+        ("ada siapa", T.RECOGNIZE_FACES),
+        ("ada berapa orang", T.COUNT_OBJECTS),
+        ("ada halangan di depan", T.SOUND),
+        ("apakah ada rintangan", T.SOUND),
+        ("is there any obstacle", T.SOUND),
         ("who's there?", T.RECOGNIZE_FACES),
         ("siapa saja yang kamu kenal", T.LIST_FACES),
         ("who do you know", T.LIST_FACES),
@@ -62,6 +90,20 @@ T = IntentType
         # Sound features are routed so the assistant can say they're unavailable.
         ("apa yang kamu dengar", T.SOUND),
         ("check ahead", T.SOUND),
+        # Vision-language model commands
+        ("jelaskan lebih detail", T.DESCRIBE_DETAIL),
+        ("tolong gambarkan sekitar dengan lengkap", T.DESCRIBE_DETAIL),
+        ("describe it in detail", T.DESCRIBE_DETAIL),
+        ("baca dokumen ini", T.READ_DOCUMENT),
+        ("bacakan menu", T.READ_DOCUMENT),
+        ("read this letter", T.READ_DOCUMENT),
+        ("lihat, ini uang berapa?", T.VISUAL_QUESTION),
+        ("look, what color is this shirt", T.VISUAL_QUESTION),
+        # ...without stealing the quick commands or the honest obstacle answer
+        ("lihat sekitar", T.DESCRIBE_SCENE),
+        ("gambarkan", T.DESCRIBE_SCENE),
+        ("baca tulisan", T.READ_TEXT),
+        ("lihat ada rintangan", T.SOUND),
         ("", T.EMPTY),
         ("   ", T.EMPTY),
     ],
@@ -157,3 +199,21 @@ def test_unknown_goes_to_general_question_with_original_text():
 def test_normalize():
     assert normalize("  Who’s THERE?! ") == "who's there"
     assert normalize("layang-layang") == "layang-layang"
+
+
+def test_visual_question_slot():
+    intent = router.parse("Coba lihat, baju ini warna apa?")
+    assert intent.type is T.VISUAL_QUESTION
+    assert intent.slots["question"] == "baju ini warna apa"
+
+
+def test_count_slot_says_whether_people_were_asked_for():
+    assert router.parse("ada berapa orang").slots == {"label": "person"}
+    assert router.parse("how many people").slots == {"label": "person"}
+    assert router.parse("ada berapa benda").slots == {}
+
+
+def test_find_slot_is_the_object_name():
+    assert router.parse("apakah ada sepeda motor di depan?").slots == {"thing": "sepeda motor"}
+    assert router.parse("ada motor nggak").slots == {"thing": "motor"}
+    assert router.parse("is there a chair in front of me").slots == {"thing": "a chair"}

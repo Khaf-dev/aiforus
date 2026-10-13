@@ -1,5 +1,6 @@
-# Dependencies are declared in pyproject.toml. This file installs everything:
+# Dependencies are declared in pyproject.toml. This file installs the
+# recommended set (same as the README quick start):
 #   pip install -r requirements.txt
-# For a lighter install pick extras instead, e.g.:
-#   pip install -e ".[voice,vision]"
--e .[all]
+# The legacy dlib face backend is left out (it needs a C++ build); add it with
+#   pip install -e ".[faces]"
+-e .[voice,piper,vision,llm]

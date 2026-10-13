@@ -6,17 +6,122 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- **"apakah ada …?"** ("is there a …?"): the fast detector answers "Ya.
+  Sepeda motor di jam 12, sekitar 2,5 meter." or "Aku tidak melihat sepeda
+  motor di kamera. Itu bukan berarti tidak ada." Everyday words map to
+  detector labels ("motor", "hp", "tas"); unknown objects ("kunci") go to
+  the vision model. "ada rintangan / halangan / lubang?" still gets the
+  honest "not available" answer.
+- **Live preview** (`--preview`): a camera window with boxes and labels
+  ("kursi | jam 1 | ~2 m", names on faces), what was heard and said, and for
+  4 s after each reply the exact photo it was based on. One background
+  camera reader (`ContinuousCamera`) feeds the window and the assistant. The
+  assistant reports through a `Monitor` protocol, so a phone display can
+  replace the window later. Nothing is saved.
+- People are placed: *"Aku melihat 2 wajah. Kaffa di jam 12, sekitar 1 meter.
+  Orang yang belum aku kenal di jam 2, sekitar 3 meter."* Known people first,
+  nearest first; more than two strangers are counted.
+- When "baca tulisan" finds no text, the assistant looks again at the same
+  photo with the vision model (`vision.ocr_fallback: vlm`, default), or only
+  suggests "baca dokumen" (`hint`), or neither (`off`).
+- **Detailed vision with a vision-language model** (Fase 1B): "jelaskan
+  lebih detail", "baca dokumen / surat / menu", and "lihat, <pertanyaan>"
+  ("lihat, ini uang berapa?"). Uses the LLM endpoint (`llm.vision_model`,
+  default = `llm.model`); the default config points at local Ollama with
+  `gemma3:4b`. Photos are downscaled (`llm.image_max_side`) and JPEG-encoded.
+  Images never go to a cloud endpoint unless `llm.allow_images_to_cloud` is
+  true, and then every request is announced. The prompt forbids claiming a
+  path is clear or anything is safe; obstacle questions keep the honest
+  "not available" answer.
+- **Clock directions and rough distances** (Fase 1A): "Kursi di jam 1,
+  sekitar 2 meter. 2 orang di jam 12, yang terdekat sekitar 3 meter."
+  Bearing from the box centre and `camera.horizontal_fov_deg`; distance from
+  the pinhole model and a typical height per object class; boxes cut off by
+  the frame are reported as "sangat dekat" without a number. Nearest first,
+  the rest summarised.
+- People are measured by the size of their face when it is visible
+  (`vision.face_height_m`, default 0.21 m), so someone 1–2.5 m away — whose
+  body doesn't fit in a webcam frame — gets a distance instead of
+  "sangat dekat". Small faces (far away) fall back to body height.
+- **Face recognition with OpenCV YuNet + SFace** (default `face.backend:
+  opencv`): ONNX models (~40 MB, or ~10 MB with `face.quantized: true`) that
+  run on edge devices, no dlib/C++ build needed. dlib remains available as
+  `face.backend: dlib`. Embeddings are stored per model, so switching
+  backends never mixes incompatible vectors.
 - Piper neural TTS (`piper` extra): natural offline Indonesian voice
   (`id_ID-news_tts-medium`) and English voice (`en_US-lessac-medium`),
   streamed per sentence and interruptible within ~50 ms.
-- `python -m aiforus --download-voices` downloads the configured voices into
-  `models/piper/` (atomic, skips files already present).
+- `python -m aiforus --download-models` downloads the Piper voices and face
+  models into `models/` (atomic, skips files already present).
+  `--download-voices` still works as an alias.
 - `speech.engine` setting: `auto` (Piper if available, else pyttsx3),
   `piper` or `pyttsx3`. `--check` shows which engine and voices are in use.
+- Documentation: `documentation/CONFIGURATION.md` (every setting, LLM/VLM
+  providers, distance calibration) and `documentation/TROUBLESHOOTING.md`.
+
+### Changed
+- General questions work with any OpenAI-compatible LLM: `llm.base_url`
+  (e.g. Ollama at `http://localhost:11434/v1`, local and free) and
+  `LLM_API_KEY` (any provider; `OPENAI_API_KEY` still accepted). No key is
+  needed for local servers. `--check` probes the server and model.
+  `llm.timeout_s` default raised to 30 s for CPU-only local models.
+- Face enrollment keeps grabbing frames for up to `face.enroll_timeout_s`
+  (default 4 s) and saves `face.enroll_samples` (default 3) samples from
+  different frames in one command. A single blurry or empty frame no longer
+  fails enrollment, and several samples make recognition more robust.
+- `face.match_threshold` now defaults to the backend's recommended value
+  (SFace 1.128 ≈ cosine 0.363; dlib 0.55).
+- The `vision` extra pins `opencv-python<5`: the YuNet/SFace models in use
+  are the OpenCV 4.x DNN versions.
+- README, ARCHITECTURE and VOICE_COMMANDS rewritten for the current feature
+  set (VLM, face-based distance, data flows, project layout, example
+  dialogue). `requirements.txt` installs the recommended extras instead of
+  `all`, so it no longer tries to build dlib.
 
 ### Fixed
+- "ini siapa", "itu siapa", "siapa orang ini" now recognise faces instead of
+  going to the LLM (found in the first Windows field test).
+- Image requests use `llm.vision_timeout_s` and are not retried: the first
+  request (which loads the model) was cut off at the 30 s chat timeout and
+  sent again.
+- The vision model said "di 3 jam" ("in 3 hours"); the clock-direction
+  instruction is now written in the reply language ("di arah jam 3").
+- General answers: the LLM is told today's date, to warn that changing facts
+  (office holders, prices, news) may be out of date, and not to ask
+  follow-up questions.
+- The "sending the photo to the internet" notice could be spoken after the
+  answer; it is now always before it.
+- English: "I see 1 faces" → "I see one face".
+- Yes/no questions to the vision model must start with "Ya." / "Tidak
+  terlihat." / "Tidak yakin." - gemma3:4b had answered the same question
+  twice with opposite, hedged sentences.
+- "Is there …?" checks by the vision model are now structured: the model
+  returns JSON (yes / no / unsure, clock, short detail) and the assistant
+  composes the sentence. Unreadable or self-contradictory replies ("Tidak
+  terlihat. Ada kunci di atas meja.") become "Aku tidak yakin …". JSON mode
+  is requested where supported, with a fallback for servers without it.
+- Presence answers read naturally: "Ya. Kunci di jam 3, di atas meja."
+  instead of "Kunci di meja di jam 3. Kunci di atas meja, terlihat jelas."
+  (the asked-about place, a repeated name and "clearly visible" remarks are
+  dropped).
+- Follow-up questions the LLM tacks on ("Bisakah Anda jelaskan lebih
+  lanjut?") are removed in code; gemma3:4b ignored the prompt rule.
+- "siapa pria tersebut", "siapa perempuan itu" recognise faces.
+- "ada berapa orang" / "how many people" counts with the camera instead of
+  going to the LLM (as the whole question only) and answers with the number
+  first: "Aku melihat 2 orang." With nobody in view: "Aku tidak melihat
+  orang di kamera" (never "there is nobody").
+- The LLM no longer announces the date or adds "may be out of date" to
+  answers that don't need it.
+- The vision model only uses clock positions 9 to 3 (it had said "jam 6",
+  which is behind the user) and is told the user is not in the photo.
+- A flaky speech-queue test (race in the fake TTS and in the test itself).
 - Console no longer shows comtypes cache logs and harmless torch warnings
   (still visible with `--debug`).
+- English "1 meters" → "1 meter".
+- Windows: the assistant no longer freezes until Enter is pressed after a
+  click in the console window (QuickEdit mode is disabled while it runs and
+  restored on exit).
 
 ## [0.2.0] — Fase 0: foundation
 

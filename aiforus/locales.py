@@ -16,6 +16,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "help_menu": (
             "Ini yang bisa aku lakukan. "
             "Melihat: katakan 'apa di depan', 'benda apa saja', atau 'baca tulisan'. "
+            "Untuk lebih rinci: 'jelaskan lebih detail', 'baca dokumen', atau 'lihat' "
+            "lalu pertanyaanmu, misalnya 'lihat, ini uang berapa'. "
             "Wajah: 'siapa ini', 'kenali wajah sebagai Budi', 'siapa saja yang kamu kenal', "
             "atau 'lupakan Budi'. "
             "Arah: 'arahkan ke' lalu nama tempat, 'arah berikutnya', 'ulangi arah', "
@@ -25,6 +27,11 @@ MESSAGES: dict[str, dict[str, str]] = {
             "dan 'matikan asisten' untuk keluar."
         ),
         "looking": "Sebentar, aku lihat dulu.",
+        "vlm_looking": "Sebentar, aku perhatikan dulu.",
+        "vlm_unavailable": "Penjelasan detail belum tersedia. Model penglihatan belum diatur.",
+        "vlm_error": "Maaf, model penglihatan tidak bisa dihubungi atau terlalu lama menjawab.",
+        "vlm_cloud_notice": "Fotonya aku kirim ke layanan AI di internet.",
+        "vlm_empty": "Aku tidak bisa menjelaskan gambar ini.",
         "stt_offline": "Pengenalan suara tidak bisa terhubung ke internet. Periksa koneksi.",
         # Camera / vision
         "vision_unavailable": "Fitur penglihatan belum terpasang di perangkat ini.",
@@ -34,14 +41,49 @@ MESSAGES: dict[str, dict[str, str]] = {
         "scene_objects": "Di depan, aku melihat {items}.",
         "scene_nothing": "Aku tidak mengenali benda apa pun di depan.",
         "scene_has_text": "Ada juga tulisan. Katakan 'baca tulisan' untuk membacanya.",
+        "spatial_item": "{what} di jam {clock}{where}.",
+        "spatial_distance": ", sekitar {distance}",
+        "spatial_nearest": ", yang terdekat sekitar {distance}",
+        "spatial_near": ", sangat dekat",
+        "spatial_close": ", kurang dari 1 meter",
+        "spatial_nearest_close": ", yang terdekat kurang dari 1 meter",
+        "spatial_more": "Ada juga {count} benda lain.",
+        "distance_under_1m": "kurang dari 1 meter",
         "text_found": "Aku menemukan {count} tulisan.",
         "text_none": "Aku tidak menemukan tulisan yang bisa dibaca.",
+        "text_try_vlm": "Tulisannya tidak terbaca dengan cara cepat. Aku coba lihat lebih teliti.",
+        "text_hint_document": "Coba katakan 'baca dokumen' supaya aku membaca lebih teliti.",
         "text_more": "Masih ada {count} tulisan lain yang tidak aku bacakan.",
         # Faces
         "faces_unavailable": "Pengenalan wajah belum terpasang di perangkat ini.",
         "faces_none": "Aku tidak melihat wajah.",
         "faces_seen": "Aku melihat {count} wajah.",
-        "faces_known": "Yang aku kenal: {names}.",
+        "faces_seen_one": "Aku melihat 1 wajah.",
+        "count_people": "Aku melihat {count} orang.",
+        "count_people_one": "Aku melihat 1 orang.",
+        "count_people_none": "Aku tidak melihat orang di kamera.",
+        "count_objects": "Aku melihat {count} benda.",
+        "find_yes": "Ya.",
+        "find_none": "Aku tidak melihat {thing} di kamera. Itu bukan berarti tidak ada.",
+        "find_unsupported": "Aku belum bisa mencari {thing} dengan cepat. Coba katakan 'jelaskan lebih detail'.",
+        # Vision-model presence check; the model only gives a verdict.
+        "presence_yes_at": "Ya. {thing} di jam {clock}.",
+        "presence_yes": "Ya, aku melihat {thing}.",
+        "presence_not_visible": "Aku tidak melihat {thing} di foto. Itu bukan berarti tidak ada.",
+        "presence_unsure": "Aku tidak yakin ada {thing} atau tidak. Coba dekatkan kamera atau ubah sudutnya.",
+        # Preview window labels (not spoken)
+        "mark_clock": "jam {clock}",
+        "mark_near": "sangat dekat",
+        "mark_unknown": "belum dikenal",
+        "preview_live": "LANGSUNG",
+        "preview_answer": "FOTO JAWABAN TERAKHIR",
+        "preview_heard": "Kamu",
+        "preview_said": "Asisten",
+        "preview_dark": "terlalu gelap",
+        "preview_blank": "kamera tertutup",
+        "preview_no_camera": "kamera tidak tersedia",
+        "face_known_at": "{name} di jam {clock}{where}.",
+        "face_unknown_at": "Orang yang belum aku kenal di jam {clock}{where}.",
         "faces_unknown": "{count} orang belum aku kenal.",
         "enroll_need_name": "Sebutkan namanya, misalnya: kenali wajah sebagai Budi.",
         "enroll_look": (
@@ -132,6 +174,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "help_menu": (
             "Here is what I can do. "
             "Seeing: say 'what's in front', 'what objects', or 'read text'. "
+            "For more detail: 'describe in detail', 'read the document', or 'look' followed "
+            "by your question, for example 'look, what color is this shirt'. "
             "Faces: 'who is this', 'enroll face as Budi', 'who do you know', or 'forget Budi'. "
             "Directions: 'take me to' and a place, 'next direction', 'repeat direction', "
             "or 'where am I'. "
@@ -140,6 +184,11 @@ MESSAGES: dict[str, dict[str, str]] = {
             "and 'turn off assistant' to exit."
         ),
         "looking": "One moment, let me look.",
+        "vlm_looking": "One moment, let me take a closer look.",
+        "vlm_unavailable": "Detailed descriptions aren't available. No vision model is set up.",
+        "vlm_error": "Sorry, the vision model can't be reached or took too long.",
+        "vlm_cloud_notice": "I'm sending the photo to an AI service on the internet.",
+        "vlm_empty": "I can't describe this image.",
         "stt_offline": "Speech recognition can't reach the internet. Please check the connection.",
         "vision_unavailable": "Vision features are not installed on this device.",
         "camera_unavailable": "The camera is not available. I can't see right now.",
@@ -148,13 +197,46 @@ MESSAGES: dict[str, dict[str, str]] = {
         "scene_objects": "In front of you, I see {items}.",
         "scene_nothing": "I don't recognize any objects in front of you.",
         "scene_has_text": "There is also some text. Say 'read text' to hear it.",
+        "spatial_item": "{what} at {clock} o'clock{where}.",
+        "spatial_distance": ", about {distance}",
+        "spatial_nearest": ", the closest about {distance}",
+        "spatial_near": ", very close",
+        "spatial_close": ", less than 1 meter away",
+        "spatial_nearest_close": ", the closest less than 1 meter away",
+        "spatial_more": "There are also {count} more objects.",
+        "distance_under_1m": "less than 1 meter",
         "text_found": "I found {count} pieces of text.",
         "text_none": "I didn't find any readable text.",
+        "text_try_vlm": "I couldn't read it the quick way. Let me look more closely.",
+        "text_hint_document": "Try saying 'read the document' for a closer look.",
         "text_more": "There are {count} more pieces of text I didn't read.",
         "faces_unavailable": "Face recognition is not installed on this device.",
         "faces_none": "I don't see any faces.",
         "faces_seen": "I see {count} faces.",
-        "faces_known": "I recognize: {names}.",
+        "faces_seen_one": "I see one face.",
+        "count_people": "I see {count} people.",
+        "count_people_one": "I see one person.",
+        "count_people_none": "I don't see anyone on the camera.",
+        "count_objects": "I see {count} objects.",
+        "find_yes": "Yes.",
+        "find_none": "I don't see any {thing} on the camera. That doesn't mean there isn't one.",
+        "find_unsupported": "I can't search for {thing} quickly yet. Try saying 'describe it in detail'.",
+        "presence_yes_at": "Yes. {thing} at {clock} o'clock.",
+        "presence_yes": "Yes, I can see {thing}.",
+        "presence_not_visible": "I don't see {thing} in the photo. That doesn't mean it isn't there.",
+        "presence_unsure": "I'm not sure whether there is {thing}. Try moving the camera closer or changing the angle.",
+        "mark_clock": "{clock} o'clock",
+        "mark_near": "very close",
+        "mark_unknown": "unknown",
+        "preview_live": "LIVE",
+        "preview_answer": "PHOTO OF THE LAST ANSWER",
+        "preview_heard": "You",
+        "preview_said": "Assistant",
+        "preview_dark": "too dark",
+        "preview_blank": "lens covered",
+        "preview_no_camera": "no camera",
+        "face_known_at": "{name} at {clock} o'clock{where}.",
+        "face_unknown_at": "Someone I don't know at {clock} o'clock{where}.",
         "faces_unknown": "{count} people I don't know yet.",
         "enroll_need_name": "Tell me the name, for example: enroll face as Budi.",
         "enroll_look": (
@@ -258,6 +340,34 @@ COCO_LABELS_ID: dict[str, str] = {
     "sink": "wastafel", "refrigerator": "kulkas", "book": "buku", "clock": "jam",
     "vase": "vas", "scissors": "gunting", "teddy bear": "boneka beruang",
     "hair drier": "pengering rambut", "toothbrush": "sikat gigi",
+}
+
+# Everyday words people use for detectable objects, on top of the names
+# above, so "ada motor?" finds a "motorcycle". Values are COCO labels.
+OBJECT_SYNONYMS: dict[str, dict[str, tuple[str, ...]]] = {
+    "id": {
+        "motor": ("motorcycle",), "sepmor": ("motorcycle",), "ojek": ("motorcycle",),
+        "manusia": ("person",), "seseorang": ("person",), "orang orang": ("person",),
+        "hp": ("cell phone",), "handphone": ("cell phone",), "telepon": ("cell phone",),
+        "telepon genggam": ("cell phone",), "gawai": ("cell phone",),
+        "meja": ("dining table",), "tas": ("backpack", "handbag", "suitcase"),
+        "gelas": ("cup", "wine glass"), "cangkir": ("cup",), "mug": ("cup",),
+        "tv": ("tv",), "kereta api": ("train",), "lampu merah": ("traffic light",),
+        "lampu lalu lintas": ("traffic light",), "bangku": ("bench", "chair"),
+        "sofa": ("couch",), "kasur": ("bed",), "tanaman": ("potted plant",),
+        "pot bunga": ("potted plant",), "piring": ("bowl",), "mangkok": ("bowl",),
+        "bola": ("sports ball",), "ransel": ("backpack",), "koper": ("suitcase",),
+        "truk": ("truck",), "bis": ("bus",), "angkot": ("car", "bus"),
+    },
+    "en": {
+        "motorbike": ("motorcycle",), "scooter": ("motorcycle",), "bike": ("bicycle", "motorcycle"),
+        "people": ("person",), "someone": ("person",), "somebody": ("person",),
+        "anyone": ("person",), "anybody": ("person",), "man": ("person",), "woman": ("person",),
+        "phone": ("cell phone",), "mobile phone": ("cell phone",), "table": ("dining table",),
+        "bag": ("backpack", "handbag", "suitcase"), "glass": ("cup", "wine glass"),
+        "mug": ("cup",), "television": ("tv",), "sofa": ("couch",), "plant": ("potted plant",),
+        "ball": ("sports ball",), "traffic lights": ("traffic light",),
+    },
 }
 
 # English plurals that don't follow the simple "+s / +es" rule.
