@@ -75,6 +75,9 @@ pytest.ini
 .dmypy.json
 dmypy.json
 
+# Runtime data: SQLite DB with face encodings (biometric data) and preferences
+data/
+
 # Database files (local instances)
 *.db
 *.sqlite

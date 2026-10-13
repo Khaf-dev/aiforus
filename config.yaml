@@ -1,150 +1,72 @@
+# AIForUs configuration (non-secret settings only).
+# Secrets such as OPENAI_API_KEY go in the environment or a .env file.
+# Unknown keys are rejected at startup, so typos fail loudly.
+# Every key is optional; the defaults live in aiforus/config.py.
+
 app:
-  name: "Vision Assistant for Visually Impaired (AIForUs)"
-  version: "0.0.1"
-  debug: true
-
-# Device profile for resource tuning (roadmap: edge / Raspberry Pi optimization)
-# desktop: full quality, default settings
-# raspberry_pi: lighter audio/vision load for Pi 4/5
-# low_memory: minimal RAM use, smaller buffers
-device:
-  profile: "desktop" # desktop | raspberry_pi | low_memory
-
-ai:
-  llm_provider: "openai" # or local
-  local_model: "microsoft/DialoGPT-small"
-  vision_model: "yolov8n"
-  text_model: "easyocr"
+  name: "AIForUs Vision Assistant"
+  language: "id"          # id (Bahasa Indonesia) | en (English)
+  data_dir: "data"        # SQLite DB with face data and preferences
+  log_level: "INFO"
 
 speech:
-  language: "en" # Default: en (English), id (Indonesian), es (Spanish), fr (French)
-  speech_rate: 150
-  use_google_tts: false # Use offline by default
-  # Language configurations
-  languages:
-    en:
-      name: "English"
-      voice_id: 0 # Default voice ID for pyttsx3
-      gtts_lang: "en"
-      recognition_lang: "en-US"
-    id:
-      name: "Indonesian"
-      voice_id: 0
-      gtts_lang: "id"
-      recognition_lang: "id-ID"
-    es:
-      name: "Spanish"
-      voice_id: 0
-      gtts_lang: "es"
-      recognition_lang: "es-ES"
-    fr:
-      name: "French"
-      voice_id: 0
-      gtts_lang: "fr"
-      recognition_lang: "fr-FR"
-    de:
-      name: "German"
-      voice_id: 0
-      gtts_lang: "de"
-      recognition_lang: "de-DE"
-    pt:
-      name: "Portuguese"
-      voice_id: 0
-      gtts_lang: "pt"
-      recognition_lang: "pt-BR"
-    ja:
-      name: "Japanese"
-      voice_id: 0
-      gtts_lang: "ja"
-      recognition_lang: "ja-JP"
-    zh:
-      name: "Mandarin Chinese"
-      voice_id: 0
-      gtts_lang: "zh-CN"
-      recognition_lang: "zh-CN"
+  rate: 170               # words per minute (pyttsx3 only; Piper uses piper_length_scale)
+  volume: 1.0
+  listen_timeout_s: 5
+  phrase_time_limit_s: 10
+  # pyttsx3 only: substrings used to pick an installed OS voice per language.
+  voice_hints:
+    id: ["indonesian", "id-id", "id_id", "andika", "gadis"]
+    en: ["english", "en-us", "en_us", "en-gb", "zira", "david"]
+  recognition_locale:
+    id: "id-ID"
+    en: "en-US"
+  # Voice engine: auto (Piper if installed and downloaded, else pyttsx3) | piper | pyttsx3
+  engine: "auto"
+  # Piper voices per language; download with: python -m aiforus --download-voices
+  piper_voices:
+    id: "id_ID-news_tts-medium"
+    en: "en_US-lessac-medium"
+  piper_dir: "models/piper"
+  piper_length_scale: 1.0   # > 1 speaks slower, < 1 faster
+
+camera:
+  index: 0
+  width: 1280
+  height: 720
+  flush_frames: 4         # discard buffered frames so captures are fresh
+  dark_threshold: 25      # mean brightness below this = "too dark"
+  blank_std_threshold: 6  # pixel std below this = "lens covered"
 
 vision:
-  camera_index: 0
-  continuous_mode: false
+  detector_model: "yolov8n.pt"
   detection_confidence: 0.5
-  text_confidence: 0.5
+  ocr_languages: ["id", "en"]
+  ocr_confidence: 0.5
+  max_objects_spoken: 6
+  max_text_regions_spoken: 5
 
-face_recognition:
+face:
   enabled: true
-  mode: "hybrid" # hybrid, cloud, local
-  model: "hog" # hog (fast, less accurate) or cnn (slower, more accurate)
-  detection_confidence: 0.6 # Face detection confidence threshold
-  recognition_confidence: 0.6 # Face recognition match threshold
-  max_distance: 0.6 # Maximum face distance for match
-  enable_training: true # Allow enrollment of new faces
-  auto_save_encodings: true # Save face encodings automatically
-  max_faces_per_person: 10 # Maximum training samples per person
-  encoding_model: "resnet" # resnet or vggface2
-
-sound_localization:
-  enabled: true
-  mode: "real-time" # real-time, background, on-demand
-  audio_source: "microphone" # microphone, usb_device, array
-  sample_rate: 16000 # Hz for audio sampling
-  chunk_size: 1024 # Samples per chunk
-  channels: 1 # Mono (1) or Stereo (2)
-
-  # Sound detection settings
-  detection:
-    enabled: true
-    min_frequency: 50 # Hz - minimum sound frequency to detect
-    max_frequency: 8000 # Hz - maximum sound frequency
-    noise_threshold: -40 # dB - noise floor
-    sound_sensitivity: 0.5 # 0.0 (sensitive) to 1.0 (filtered)
-
-  # Localization settings
-  localization:
-    enabled: true
-    method: "beamforming" # beamforming, time-difference, phase-shift
-    num_directions: 8 # Number of angle bins (8 = 45° resolution)
-    angle_resolution: 45 # Degrees per bin
-    max_range: 10 # Meters - maximum localization range
-
-  # Obstacle detection
-  obstacles:
-    enabled: true
-    detection_timeout: 2.0 # Seconds to detect obstacles
-    warning_threshold: 2.0 # Meters - distance to warn user
-    continuous_monitoring: true
-
-  # Audio classification
-  audio_classification:
-    enabled: true
-    classify_sounds: true # Identify sound types (speech, alarm, door, etc.)
-    confidence_threshold: 0.7
-
-  # Alerts
-  alerts:
-    speech_alert: true
-    haptic_alert: false
-    frequency: 1000 # Hz - alert tone frequency
-    duration: 0.2 # Seconds - alert duration
+  detection_model: "hog"  # hog (fast, CPU) | cnn (accurate, needs GPU)
+  match_threshold: 0.55   # lower = stricter matching
+  max_samples_per_person: 10
 
 navigation:
-  map_provider: "openstreetmap"
-  emergency_alert: true
-  audio_guidance: true # Use sound localization for navigation
-  haptic_feedback: false
-  voice_directions_frequency: "periodic" # constant, periodic, on-demand
-  # Continuous obstacle monitoring while a route is active (speaks only when there's a new warning)
-  continuous_obstacle_check: true
-  continuous_obstacle_interval: 5 # seconds between checks
+  enabled: true
+  routing_url: "https://router.project-osrm.org"
+  routing_profile: "foot"
+  geocoding_url: "https://nominatim.openstreetmap.org/search"
+  ip_location_url: "https://ipinfo.io/json"
+  http_timeout_s: 8
+  walking_speed_mps: 1.2
 
-database:
-  path: "vision_assistant.db"
-  backup_interval: 24 # in hours
+llm:
+  enabled: true           # needs OPENAI_API_KEY; used only for general questions
+  model: "gpt-4o-mini"
+  timeout_s: 15
+  max_tokens: 200
 
-accessibility:
-  voice_feedback: true
-  haptic_feedback: false
-  audio_cues: true
-
-apis:
-  openai_api_key: "${}" # Set my OpenAI API
-  google_maps_key: "${}" # Set my Google Maps API Key
-  weather_api_key: "${}" # Set my Weather API Key here
+emergency:
+  contacts: []            # sending alerts is not implemented yet
+  local_emergency_number: "112"

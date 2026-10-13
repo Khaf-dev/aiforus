@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master, "fase-*/**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      # Core + dev only: the test-suite uses fakes for camera, microphone,
+      # TTS and ML models, so no heavy or hardware-bound packages are needed.
+      - name: Install
+        run: python -m pip install -e ".[dev]"
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Format
+        run: ruff format --check .
+
+      - name: Tests
+        run: pytest -q
+
+      - name: Component report (smoke test)
+        run: python -m aiforus --check
