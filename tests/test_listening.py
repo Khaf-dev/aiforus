@@ -81,7 +81,7 @@ class FakeTranscriber:
         return self.text
 
 
-def make(frames, *, detector=None, key=None, speaking=lambda: False, **kwargs):
+def make(frames, *, detector=None, key=None, speaking=lambda: False, guard=0.0, **kwargs):
     source = Script(frames)
     transcriber = FakeTranscriber()
     listener = TriggeredSpeechInput(
@@ -94,6 +94,7 @@ def make(frames, *, detector=None, key=None, speaking=lambda: False, **kwargs):
         **kwargs,
     )
     listener.ECHO_GUARD_S = 0.0
+    listener.TRIGGER_GUARD_S = guard
     source.listener = listener
     triggers = []
     listener.attach(on_trigger=triggers.append, is_speaking=speaking)
@@ -174,6 +175,44 @@ def test_emergency_without_name_can_be_switched_off():
 def test_needs_a_detector_or_a_key():
     with pytest.raises(ValueError):
         TriggeredSpeechInput(Script([]), FakeTranscriber(), language="id")
+
+
+def test_waiting_for_the_beep_does_not_cut_the_command_off():
+    # "Hai Nemo" ... (beep, a pause) ... "apa di depan". The name right before the
+    # trigger used to count as the command and ended the recording during the pause.
+    frames = [LOUD] * 3 + [SILENT] * 5 + [LOUD] * 4 + [SILENT] * 4  # pause 0.4 s > end_silence_s
+    listener, transcriber, _ = make(frames, detector=FakeDetector({3: Trigger.WAKE}))
+    assert listener.listen() == "apa di depan"
+    frames_sent = transcriber.audio[0][0]
+    assert frames_sent <= CommandRecorder.LEAD_IN_FRAMES + 4 + 3  # the name and the pause are not sent
+
+
+def test_a_command_in_one_breath_keeps_the_audio_before_the_trigger():
+    # Detectors fire a little late, so the start of the command can be before the trigger.
+    recorder = CommandRecorder(start_timeout_s=1, max_s=5, end_silence_s=0.24)
+    audio = recorder.record(iter([LOUD] * 3 + [SILENT] * 5), noise_rms=100, preroll=[LOUD] * 2)
+    assert len(audio) // 2 // FRAME_SAMPLES == 2 + 3 + 3
+
+
+def test_the_beep_does_not_start_the_recording():
+    beep_then_quiet = [LOUD] * 2 + [SILENT] * 3
+    listener, transcriber, _ = make(
+        [SILENT] + beep_then_quiet + [SILENT] * 3, detector=FakeDetector({1: Trigger.WAKE}), guard=0.16
+    )
+    assert listener.listen() is None  # nothing said: the beep alone is not sent
+    assert transcriber.audio == []
+
+    frames = [SILENT] + [LOUD] * 2 + [SILENT] * 3 + [LOUD] * 3 + [SILENT] * 4
+    listener, transcriber, _ = make(frames, detector=FakeDetector({1: Trigger.WAKE}), guard=0.16)
+    assert listener.listen() == "apa di depan"
+
+
+def test_the_key_ignores_what_was_heard_before_it_was_pressed():
+    # The assistant was talking (loud) until the key; only what follows is the command.
+    frames = [LOUD] * 5 + [SILENT] * 4 + [LOUD] * 3 + [SILENT] * 4
+    listener, transcriber, _ = make(frames, key=FakeKey(press_at={5}), speaking=lambda: True)
+    assert listener.listen() == "apa di depan"
+    assert transcriber.audio[0][0] <= CommandRecorder.LEAD_IN_FRAMES + 3 + 3
 
 
 def test_recorder_stops_at_the_length_limit():

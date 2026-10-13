@@ -120,24 +120,44 @@ class CommandRecorder:
         self.min_rms = min_rms
         self.ratio = ratio
 
+    LEAD_IN_FRAMES = 4  # audio kept from just before speech starts
+
     def record(
-        self, frames: Iterator[bytes], noise_rms: float, preroll: list[bytes] | None = None
+        self,
+        frames: Iterator[bytes],
+        noise_rms: float,
+        preroll: list[bytes] | None = None,
+        *,
+        ignore_s: float = 0.0,
     ) -> bytes | None:
+        """Record one command.
+
+        ``preroll`` (audio from just before the trigger) is kept when speech
+        follows at once - a command said in one breath with the name - but it
+        never counts as the start of the command: it holds the wake word
+        itself, and counting that would end the recording while the user is
+        still waiting for the beep. Loud audio in the first ``ignore_s`` after
+        the trigger (the beep, the assistant's voice fading out) does not
+        start the recording either; it is only kept as lead-in.
+        """
         threshold = max(self.min_rms, noise_rms * self.ratio)
+        guard = round(ignore_s / FRAME_S)
+        timeout = round(self.start_timeout_s / FRAME_S)
         collected = list(preroll or [])
-        started = any(rms(f) >= threshold for f in collected)
-        waited = silence = 0.0
+        started = False
+        waited = 0
+        silence = 0.0
         for frame in frames:
             loud = rms(frame) >= threshold
             collected.append(frame)
             if not started:
-                waited += FRAME_S
-                if loud:
+                waited += 1
+                if loud and waited > guard:
                     started = True
-                elif waited >= self.start_timeout_s:
+                elif waited >= timeout:
                     return None
-                else:
-                    collected = collected[-4:]  # keep a short lead-in only
+                elif waited > guard:
+                    collected = collected[-self.LEAD_IN_FRAMES :]  # a pause: drop the name, keep a lead-in
                 continue
             silence = 0.0 if loud else silence + FRAME_S
             if silence >= self.end_silence_s or len(collected) * FRAME_S >= self.max_s:
@@ -239,6 +259,10 @@ class TriggeredSpeechInput:
                 return self._capture(Trigger.WAKE)
         return None
 
+    # After a trigger: the beep and the end of the assistant's speech are loud
+    # but are not the command.
+    TRIGGER_GUARD_S = 0.32
+
     # A cry for help is short; "tolong ambilkan air" keeps going.
     STANDALONE_WINDOW_S = 1.0
     STANDALONE_MAX_SPEECH_S = 0.32
@@ -263,9 +287,11 @@ class TriggeredSpeechInput:
     def _capture(self, trigger: Trigger) -> str | None:
         logger.debug("Listening (%s)", trigger.value)
         self._notify(trigger)
-        preroll = list(self._ring)
+        # Before a key press there is nothing of the command (maybe the
+        # assistant's own voice); before the wake word there may be its start.
+        preroll = list(self._ring) if trigger is Trigger.WAKE else []
         self._ring.clear()
-        audio = self._recorder.record(self._frames(), self._noise, preroll)
+        audio = self._recorder.record(self._frames(), self._noise, preroll, ignore_s=self.TRIGGER_GUARD_S)
         if self.detector is not None:
             self.detector.reset()
         if audio is None:
