@@ -48,6 +48,14 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="show a live camera window with what the assistant detects (for developers and helpers)",
     )
+    parser.add_argument(
+        "--record-wake-samples",
+        metavar="N",
+        nargs="?",
+        const=20,
+        type=int,
+        help="record N clips of 'hai nemo', 'tolong', ... for wake word training (default 20)",
+    )
     parser.add_argument("--debug", action="store_true", help="verbose logging")
     parser.add_argument("--version", action="version", version=f"aiforus {__version__}")
     return parser
@@ -406,6 +414,39 @@ def download_models(settings: Settings) -> int:
     return 1 if failures else 0
 
 
+def record_wake_samples(settings: Settings, count: int) -> int:
+    import time
+
+    from .hal.listening import Beeper, PyAudioSource
+    from .wake_samples import record_samples
+
+    try:
+        source = PyAudioSource()
+    except ComponentUnavailable as exc:
+        print(f"No microphone: {exc}")
+        return 2
+    try:
+        beeper = Beeper()
+    except ComponentUnavailable:
+        beeper = None
+
+    def beep() -> None:
+        if beeper is not None:
+            beeper.play()
+            time.sleep(0.25)  # let the beep finish before recording
+
+    out_dir = settings.data_dir / "wake_samples"
+    print(f"Rekaman disimpan di {out_dir} (tetap di komputer ini).")
+    print("Setelah bunyi 'ting', ucapkan frasanya sekali dengan suara biasa. Variasikan jarak dan nada.")
+    try:
+        saved = record_samples(source, out_dir, count=count, beep=beep)
+    finally:
+        _close_quietly(source, beeper)
+    print("\nSelesai: " + ", ".join(f"{slug} {n}" for slug, n in saved.items()))
+    print("Lanjut training: lihat tools/wakeword/README.md")
+    return 0
+
+
 def run_check(settings: Settings, args: argparse.Namespace) -> int:
     language = args.lang or settings.app.language
     print(f"AIForUs {__version__} - Python {platform.python_version()} on {platform.system()}")
@@ -595,6 +636,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.download_models:
         return download_models(settings)
+    if args.record_wake_samples:
+        return record_wake_samples(settings, args.record_wake_samples)
     if args.check:
         # The report already lists every problem; skip the duplicate warnings.
         logging.getLogger().setLevel(logging.ERROR)

@@ -310,6 +310,13 @@ class PyAudioSource:
         with self._lock:
             return self._stream.read(FRAME_SAMPLES, exception_on_overflow=False)
 
+    def drain(self) -> None:
+        """Drop audio that queued up while nobody was reading."""
+        with self._lock:
+            available = self._stream.get_read_available()
+            if available:
+                self._stream.read(available, exception_on_overflow=False)
+
     def close(self) -> None:
         with self._lock:
             try:
