@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- **"apakah ada …?"** ("is there a …?"): the fast detector answers "Ya.
+  Sepeda motor di jam 12, sekitar 2,5 meter." or "Aku tidak melihat sepeda
+  motor di kamera. Itu bukan berarti tidak ada." Everyday words map to
+  detector labels ("motor", "hp", "tas"); unknown objects ("kunci") go to
+  the vision model. "ada rintangan / halangan / lubang?" still gets the
+  honest "not available" answer.
 - **Live preview** (`--preview`): a camera window with boxes and labels
   ("kursi | jam 1 | ~2 m", names on faces), what was heard and said, and for
   4 s after each reply the exact photo it was based on. One background

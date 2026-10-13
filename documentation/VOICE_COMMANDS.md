@@ -34,6 +34,7 @@ time. Anything that doesn't match a command is a
 | Describe the scene | "apa di depan", "ada apa di sekitar", "gambarkan", "lihat sekitar" | "what's in front of me", "describe" |
 | Objects only | "benda apa saja", "deteksi benda" | "what objects", "detect objects" |
 | Count | "ada berapa orang", "berapa benda di depan" | "how many people", "how many objects" |
+| Is there …? | "apakah ada sepeda motor di depan?", "ada kursi nggak?" | "is there a chair?", "do you see my phone?" |
 | Read short text | "baca tulisan", "bacakan", "apa tulisannya" | "read text", "what does it say" |
 
 The answer uses **clock directions** (12 = straight ahead, 3 = right,
@@ -54,6 +55,12 @@ The answer uses **clock directions** (12 = straight ahead, 3 = right,
   di jam 1, sekitar 2 meter. Orang di jam 12, sekitar 3 meter."* With nobody
   in view it says *"Aku tidak melihat orang di kamera"* — never that nobody
   is there, because the camera only sees part of the surroundings.
+- **"apakah ada …?"** answers *"Ya. Sepeda motor di jam 12, sekitar 2,5
+  meter."* or *"Aku tidak melihat sepeda motor di kamera. Itu bukan berarti
+  tidak ada."* — never "there is none". Everyday words work ("motor", "hp",
+  "tas", "meja"). Objects the fast detector doesn't know ("kunci", "uang")
+  go to the vision model instead. Obstacle words ("ada rintangan / halangan /
+  lubang?") get the honest "not available yet" answer.
 - If the camera is dark or covered the assistant says it **can't see** —
   never that nothing is there.
 - If **"baca tulisan"** finds nothing (small, distant or stylised text such

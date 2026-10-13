@@ -41,6 +41,7 @@ class IntentType(str, Enum):
     READ_TEXT = "read_text"
     DETECT_OBJECTS = "detect_objects"
     COUNT_OBJECTS = "count_objects"
+    FIND_OBJECT = "find_object"
     DESCRIBE_SCENE = "describe_scene"
     DESCRIBE_DETAIL = "describe_detail"
     READ_DOCUMENT = "read_document"
@@ -279,8 +280,25 @@ _RULES: list[tuple[IntentType, re.Pattern[str]]] = [
     (
         IntentType.SOUND,
         _rx(
-            r"\b(?:apa yang kamu dengar|suara apa|dengarkan(?: sekitar)?|ada rintangan|cek (?:jalan|depan)"
+            r"\b(?:apa yang kamu dengar|suara apa|dengarkan(?: sekitar)?"
+            r"|ada (?:rintangan|halangan|hambatan|lubang)|cek (?:jalan|depan)"
             r"|what do you hear|what sound|detect sounds|listen around|check ahead|any obstacles?|obstacles?)\b"
+        ),
+    ),
+    # "apakah ada sepeda motor di depan?" - after the obstacle rule above, so
+    # "ada rintangan?" keeps the honest "not available" answer.
+    (
+        IntentType.FIND_OBJECT,
+        _rx(
+            r"^(?:apakah |apa )?ada (?!apa\b|siapa\b|berapa\b)(?P<thing>.+?)"
+            r"(?: (?:di (?:depan|sekitar|sini|sana)(?: saya| aku| ku)?|ya|nggak|ngga|gak|ga|enggak|tidak))*$"
+        ),
+    ),
+    (
+        IntentType.FIND_OBJECT,
+        _rx(
+            r"^(?:is there|are there|do you see|can you see) (?P<thing>.+?)"
+            r"(?: (?:in front(?: of me)?|here|around(?: me)?|ahead))?$"
         ),
     ),
     # "lihat, ini uang berapa?" — a question about what the camera sees.
@@ -335,6 +353,8 @@ class IntentRouter:
         if intent_type is IntentType.NAVIGATE:
             dest = groups.get("dest")
             return {"destination": dest} if dest else {}
+        if intent_type is IntentType.FIND_OBJECT:
+            return {"thing": groups.get("thing", "")}
         if intent_type is IntentType.COUNT_OBJECTS:
             return {"label": "person"} if groups.get("what") in ("orang", "people", "persons") else {}
         if intent_type is IntentType.VISUAL_QUESTION:

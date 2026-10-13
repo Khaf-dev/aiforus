@@ -52,6 +52,19 @@ T = IntentType
         ("berapa banyak benda", T.COUNT_OBJECTS),
         ("how many people are in front of me", T.COUNT_OBJECTS),
         ("berapa orang yang tinggal di jakarta", T.GENERAL_QUESTION),
+        # "apakah ada <benda>?" - fourth Windows test
+        ("apakah ada sepeda motor di depan?", T.FIND_OBJECT),
+        ("ada motor nggak", T.FIND_OBJECT),
+        ("ada kursi di sekitar saya ya", T.FIND_OBJECT),
+        ("is there a chair in front of me", T.FIND_OBJECT),
+        ("do you see my phone", T.FIND_OBJECT),
+        # ...without stealing other commands
+        ("ada apa di depan", T.DESCRIBE_SCENE),
+        ("ada siapa", T.RECOGNIZE_FACES),
+        ("ada berapa orang", T.COUNT_OBJECTS),
+        ("ada halangan di depan", T.SOUND),
+        ("apakah ada rintangan", T.SOUND),
+        ("is there any obstacle", T.SOUND),
         ("who's there?", T.RECOGNIZE_FACES),
         ("siapa saja yang kamu kenal", T.LIST_FACES),
         ("who do you know", T.LIST_FACES),
@@ -196,3 +209,9 @@ def test_count_slot_says_whether_people_were_asked_for():
     assert router.parse("ada berapa orang").slots == {"label": "person"}
     assert router.parse("how many people").slots == {"label": "person"}
     assert router.parse("ada berapa benda").slots == {}
+
+
+def test_find_slot_is_the_object_name():
+    assert router.parse("apakah ada sepeda motor di depan?").slots == {"thing": "sepeda motor"}
+    assert router.parse("ada motor nggak").slots == {"thing": "motor"}
+    assert router.parse("is there a chair in front of me").slots == {"thing": "a chair"}

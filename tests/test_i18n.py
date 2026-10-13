@@ -52,3 +52,20 @@ def test_missing_key_does_not_crash():
 def test_rejects_unsupported_language():
     with pytest.raises(ValueError):
         Translator("fr")
+
+
+def test_find_labels_maps_everyday_words_to_detector_labels():
+    tr = Translator("id")
+    assert tr.find_labels("sepeda motor") == ("motorcycle",)
+    assert tr.find_labels("motor") == ("motorcycle",)
+    assert tr.find_labels("sebuah kursi") == ("chair",)
+    assert tr.find_labels("kursi-kursi") == ("chair",)
+    assert tr.find_labels("hp") == ("cell phone",)
+    assert tr.find_labels("tas") == ("backpack", "handbag", "suitcase")
+    assert tr.find_labels("kunci") == ()  # not something the detector knows
+    en = Translator("en")
+    assert en.find_labels("a chair") == ("chair",)
+    assert en.find_labels("any chairs") == ("chair",)
+    assert en.find_labels("buses") == ("bus",)
+    assert en.find_labels("people") == ("person",)
+    assert en.find_labels("my keys") == ()

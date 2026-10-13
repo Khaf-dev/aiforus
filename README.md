@@ -172,6 +172,7 @@ Commands at a glance (full list with English:
 | Get help **now** | "tolong", "darurat", "saya jatuh" |
 | Hear the command list | "bantuan" |
 | Know what's in front (fast) | "apa di depan" |
+| Check for something | "apakah ada sepeda motor di depan?", "ada berapa orang?" |
 | Get a detailed description | "jelaskan lebih detail" |
 | Read a letter, menu or label | "baca dokumen", "bacakan menu" |
 | Ask about what the camera sees | "lihat, baju ini warna apa?" |

@@ -812,3 +812,50 @@ async def test_count_objects(tmp_path):
     async with Harness(tmp_path, frames=[textured_frame(size=HD)], labels=labels, texts=[]) as h:
         spoken = await h.say("ada berapa benda")
         assert spoken[0] == "Aku melihat 2 benda."
+
+
+# -- "apakah ada ...?" -------------------------------------------------------------
+
+
+async def test_find_object_says_where_it_is(tmp_path):
+    labels = [at("motorcycle", 2.5), at("chair", 2, center_x=200)]
+    async with Harness(tmp_path, frames=[textured_frame(size=HD)], labels=labels, texts=[]) as h:
+        assert await h.say("apakah ada sepeda motor di depan?") == [
+            "Ya. Sepeda motor di jam 12, sekitar 2,5 meter."
+        ]
+        assert await h.say("ada motor nggak") == ["Ya. Sepeda motor di jam 12, sekitar 2,5 meter."]
+
+
+async def test_find_object_never_claims_it_is_absent(tmp_path):
+    async with Harness(tmp_path, frames=[textured_frame(size=HD)], labels=[at("chair", 2)], texts=[]) as h:
+        assert await h.say("apakah ada sepeda motor") == [
+            "Aku tidak melihat sepeda motor di kamera. Itu bukan berarti tidak ada."
+        ]
+
+
+async def test_find_unknown_object_asks_the_vision_model(tmp_path, fake_jpeg):
+    from aiforus.services.llm import VisionTask
+
+    vlm = StubVLM(reply="Ya, ada kunci di meja, di arah jam 1.")
+    async with Harness(tmp_path, vlm=vlm) as h:
+        assert await h.say("apakah ada kunci di meja") == ["Ya, ada kunci di meja, di arah jam 1."]
+    assert vlm.calls[0][1] is VisionTask.QUESTION
+    assert vlm.calls[0][3] == "apakah ada kunci di meja"
+
+
+async def test_find_unknown_object_without_vision_model(tmp_path):
+    async with Harness(tmp_path, language="en") as h:
+        assert await h.say("is there a key") == [
+            "I can't search for a key quickly yet. Try saying 'describe it in detail'."
+        ]
+
+
+async def test_find_object_in_english(tmp_path):
+    async with Harness(
+        tmp_path, frames=[textured_frame(size=HD)], labels=[at("chair", 2)], texts=[], language="en"
+    ) as h:
+        assert await h.say("is there a chair in front of me") == ["Yes. Chair at 12 o'clock, about 2 meters."]
+        h.assistant.vision.detector.items = []
+        assert await h.say("are there any buses") == [
+            "I don't see any buses on the camera. That doesn't mean there isn't one."
+        ]

@@ -133,6 +133,7 @@ class Assistant:
             IntentType.DESCRIBE_SCENE: self._describe_scene,
             IntentType.DETECT_OBJECTS: self._detect_objects,
             IntentType.COUNT_OBJECTS: self._count_objects,
+            IntentType.FIND_OBJECT: self._find_object,
             IntentType.READ_TEXT: self._read_text,
             IntentType.DESCRIBE_DETAIL: self._describe_detail,
             IntentType.READ_DOCUMENT: self._read_document,
@@ -402,6 +403,30 @@ class Assistant:
             self.say("scene_nothing")
         else:
             self._show(look.frame)
+
+    async def _find_object(self, intent: Intent) -> None:
+        """ "apakah ada sepeda motor?" - the fast detector if it knows the
+        object, otherwise the vision model."""
+        thing = intent.slots.get("thing", "").strip()
+        labels = self.tr.find_labels(thing)
+        if not labels:
+            if self.vlm is not None:
+                await self._ask_vlm(VisionTask.QUESTION, intent.text)
+            else:
+                self.say("find_unsupported", thing=thing)
+            return
+        look = await self._look(objects=True, text=False)
+        if look is None:
+            return
+        look.detections = [d for d in look.detections if d.label in labels]
+        if not look.detections:
+            self._show(look.frame)
+            # Never "there is no motorcycle": the camera sees only part of the
+            # surroundings and the detector misses things.
+            self.say("find_none", thing=self.tr.object_name(thing))
+            return
+        found = self._describe_objects(look, await self._face_boxes(look))
+        self.speech.say(f"{self.tr.t('find_yes')} {found}", Priority.HIGH)
 
     async def _read_text(self, intent: Intent) -> None:
         look = await self._look(objects=False, text=True)

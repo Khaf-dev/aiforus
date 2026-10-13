@@ -63,6 +63,9 @@ MESSAGES: dict[str, dict[str, str]] = {
         "count_people_one": "Aku melihat 1 orang.",
         "count_people_none": "Aku tidak melihat orang di kamera.",
         "count_objects": "Aku melihat {count} benda.",
+        "find_yes": "Ya.",
+        "find_none": "Aku tidak melihat {thing} di kamera. Itu bukan berarti tidak ada.",
+        "find_unsupported": "Aku belum bisa mencari {thing} dengan cepat. Coba katakan 'jelaskan lebih detail'.",
         # Preview window labels (not spoken)
         "mark_clock": "jam {clock}",
         "mark_near": "sangat dekat",
@@ -210,6 +213,9 @@ MESSAGES: dict[str, dict[str, str]] = {
         "count_people_one": "I see one person.",
         "count_people_none": "I don't see anyone on the camera.",
         "count_objects": "I see {count} objects.",
+        "find_yes": "Yes.",
+        "find_none": "I don't see any {thing} on the camera. That doesn't mean there isn't one.",
+        "find_unsupported": "I can't search for {thing} quickly yet. Try saying 'describe it in detail'.",
         "mark_clock": "{clock} o'clock",
         "mark_near": "very close",
         "mark_unknown": "unknown",
@@ -325,6 +331,34 @@ COCO_LABELS_ID: dict[str, str] = {
     "sink": "wastafel", "refrigerator": "kulkas", "book": "buku", "clock": "jam",
     "vase": "vas", "scissors": "gunting", "teddy bear": "boneka beruang",
     "hair drier": "pengering rambut", "toothbrush": "sikat gigi",
+}
+
+# Everyday words people use for detectable objects, on top of the names
+# above, so "ada motor?" finds a "motorcycle". Values are COCO labels.
+OBJECT_SYNONYMS: dict[str, dict[str, tuple[str, ...]]] = {
+    "id": {
+        "motor": ("motorcycle",), "sepmor": ("motorcycle",), "ojek": ("motorcycle",),
+        "manusia": ("person",), "seseorang": ("person",), "orang orang": ("person",),
+        "hp": ("cell phone",), "handphone": ("cell phone",), "telepon": ("cell phone",),
+        "telepon genggam": ("cell phone",), "gawai": ("cell phone",),
+        "meja": ("dining table",), "tas": ("backpack", "handbag", "suitcase"),
+        "gelas": ("cup", "wine glass"), "cangkir": ("cup",), "mug": ("cup",),
+        "tv": ("tv",), "kereta api": ("train",), "lampu merah": ("traffic light",),
+        "lampu lalu lintas": ("traffic light",), "bangku": ("bench", "chair"),
+        "sofa": ("couch",), "kasur": ("bed",), "tanaman": ("potted plant",),
+        "pot bunga": ("potted plant",), "piring": ("bowl",), "mangkok": ("bowl",),
+        "bola": ("sports ball",), "ransel": ("backpack",), "koper": ("suitcase",),
+        "truk": ("truck",), "bis": ("bus",), "angkot": ("car", "bus"),
+    },
+    "en": {
+        "motorbike": ("motorcycle",), "scooter": ("motorcycle",), "bike": ("bicycle", "motorcycle"),
+        "people": ("person",), "someone": ("person",), "somebody": ("person",),
+        "anyone": ("person",), "anybody": ("person",), "man": ("person",), "woman": ("person",),
+        "phone": ("cell phone",), "mobile phone": ("cell phone",), "table": ("dining table",),
+        "bag": ("backpack", "handbag", "suitcase"), "glass": ("cup", "wine glass"),
+        "mug": ("cup",), "television": ("tv",), "sofa": ("couch",), "plant": ("potted plant",),
+        "ball": ("sports ball",), "traffic lights": ("traffic light",),
+    },
 }
 
 # English plurals that don't follow the simple "+s / +es" rule.

@@ -5,7 +5,15 @@ from __future__ import annotations
 import logging
 
 from .config import SUPPORTED_LANGUAGES
-from .locales import COCO_LABELS_ID, EN_IRREGULAR_PLURALS, MESSAGES
+from .locales import COCO_LABELS_ID, EN_IRREGULAR_PLURALS, MESSAGES, OBJECT_SYNONYMS
+
+_ID_NAME_TO_LABEL = {name: label for label, name in COCO_LABELS_ID.items()}
+_EN_PLURAL_TO_LABEL = {plural: label for label, plural in EN_IRREGULAR_PLURALS.items()}
+# Filler words around an object name: "sebuah kursi", "a chair", "kursi-kursi".
+_FILLERS = {
+    "id": ("sebuah", "seekor", "satu", "beberapa", "yang", "si"),
+    "en": ("a", "an", "any", "the", "some"),
+}
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +68,38 @@ class Translator:
         if self._language == "id":
             return COCO_LABELS_ID.get(coco_label, coco_label)
         return coco_label
+
+    def object_name(self, name: str) -> str:
+        """The object name without filler words: "any buses" -> "buses"."""
+        words = [w for w in name.lower().replace("-", " ").split() if w not in _FILLERS[self._language]]
+        return " ".join(words) or name.strip()
+
+    def find_labels(self, name: str) -> tuple[str, ...]:
+        """COCO labels for an object name the user said ("motor" ->
+        motorcycle). Empty when the detector doesn't know the object."""
+        text = self.object_name(name)
+        words = text.split()
+        if self._language == "id":
+            words_once = list(dict.fromkeys(words))  # "kursi kursi" -> "kursi"
+            candidates = [text, " ".join(words_once)]
+        else:
+            candidates = [text]
+            if text.endswith("es"):
+                candidates.append(text[:-2])
+            if text.endswith("s"):
+                candidates.append(text[:-1])
+        synonyms = OBJECT_SYNONYMS.get(self._language, {})
+        for candidate in candidates:
+            if candidate in synonyms:
+                return synonyms[candidate]
+            if self._language == "id" and candidate in _ID_NAME_TO_LABEL:
+                return (_ID_NAME_TO_LABEL[candidate],)
+            if self._language == "en":
+                if candidate in COCO_LABELS_ID:
+                    return (candidate,)
+                if candidate in _EN_PLURAL_TO_LABEL:
+                    return (_EN_PLURAL_TO_LABEL[candidate],)
+        return ()
 
     def count_label(self, coco_label: str, count: int) -> str:
         """``2 orang`` / ``2 people``."""
