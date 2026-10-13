@@ -32,6 +32,7 @@ class TextRegion:
     confidence: float
     top: float = 0.0
     left: float = 0.0
+    box: tuple[float, float, float, float] | None = None  # x1, y1, x2, y2
 
 
 class ObjectDetector(Protocol):
@@ -142,7 +143,8 @@ class EasyOcrReader:
                 continue
             xs = [p[0] for p in points]
             ys = [p[1] for p in points]
-            regions.append(TextRegion(str(text).strip(), float(prob), float(min(ys)), float(min(xs))))
+            box = (float(min(xs)), float(min(ys)), float(max(xs)), float(max(ys)))
+            regions.append(TextRegion(str(text).strip(), float(prob), box[1], box[0], box))
         return sort_reading_order(regions)
 
 

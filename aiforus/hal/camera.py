@@ -61,20 +61,20 @@ class OpenCVCamera:
             cap.grab()
         return cap
 
-    def _read(self) -> np.ndarray | None:
-        for _ in range(self._settings.flush_frames):
+    def _read(self, flush: int) -> np.ndarray | None:
+        for _ in range(flush):
             self._cap.grab()
         ok, frame = self._cap.read()
         return frame if ok and frame is not None else None
 
-    def capture(self) -> np.ndarray | None:
+    def _grab(self, flush: int) -> np.ndarray | None:
         with self._lock:
             for attempt in range(2):  # reopen once if the device dropped
                 if self._cap is None:
                     self._cap = self._open()
                     if self._cap is None:
                         return None
-                frame = self._read()
+                frame = self._read(flush)
                 if frame is not None:
                     return frame
                 logger.warning("Camera read failed (attempt %d); reopening", attempt + 1)
@@ -82,8 +82,87 @@ class OpenCVCamera:
                 self._cap = None
             return None
 
+    def capture(self) -> np.ndarray | None:
+        return self._grab(self._settings.flush_frames)
+
+    def read_frame(self) -> np.ndarray | None:
+        """The next frame without flushing - for a reader that never stops."""
+        return self._grab(0)
+
     def close(self) -> None:
         with self._lock:
             if self._cap is not None:
                 self._cap.release()
                 self._cap = None
+
+
+class FrameSource(Protocol):
+    def read_frame(self) -> np.ndarray | None: ...
+
+    def close(self) -> None: ...
+
+
+class ContinuousCamera:
+    """Reads a camera continuously on a background thread.
+
+    Used with the live preview, so the preview and the assistant share one
+    device. :meth:`capture` still waits for a frame taken *after* the call,
+    like :class:`OpenCVCamera`, so answers describe now - and it's faster,
+    because nothing has to be flushed.
+    """
+
+    def __init__(
+        self, source: FrameSource, *, fresh_timeout_s: float = 2.0, retry_delay_s: float = 2.0
+    ) -> None:
+        self._source = source
+        self._fresh_timeout_s = fresh_timeout_s
+        self._retry_delay_s = retry_delay_s
+        self._changed = threading.Condition()
+        self._frame: np.ndarray | None = None
+        self._seq = 0
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    def start(self) -> None:
+        with self._changed:
+            if self._thread is None and not self._stop.is_set():
+                self._thread = threading.Thread(target=self._run, name="camera-reader", daemon=True)
+                self._thread.start()
+
+    def _run(self) -> None:
+        while not self._stop.is_set():
+            try:
+                frame = self._source.read_frame()
+            except Exception:
+                logger.exception("Camera read failed")
+                frame = None
+            if frame is None:
+                self._stop.wait(self._retry_delay_s)  # unplugged: retry, don't spin
+                continue
+            with self._changed:
+                self._frame = frame
+                self._seq += 1
+                self._changed.notify_all()
+
+    def latest(self) -> np.ndarray | None:
+        """The newest frame (possibly a few ms old), or None."""
+        with self._changed:
+            return self._frame
+
+    def capture(self) -> np.ndarray | None:
+        self.start()
+        with self._changed:
+            target = self._seq + 1
+            self._changed.wait_for(
+                lambda: self._seq >= target or self._stop.is_set(), timeout=self._fresh_timeout_s
+            )
+            return self._frame if self._seq >= target else None
+
+    def close(self) -> None:
+        self._stop.set()
+        with self._changed:
+            self._changed.notify_all()
+            thread = self._thread
+        if thread is not None:
+            thread.join(timeout=3)
+        self._source.close()

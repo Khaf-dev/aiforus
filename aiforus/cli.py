@@ -43,6 +43,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="download the Piper voices and face models named in config.yaml",
     )
+    parser.add_argument(
+        "--preview",
+        action="store_true",
+        help="show a live camera window with what the assistant detects (for developers and helpers)",
+    )
     parser.add_argument("--debug", action="store_true", help="verbose logging")
     parser.add_argument("--version", action="version", version=f"aiforus {__version__}")
     return parser
@@ -344,9 +349,17 @@ async def run_assistant(settings: Settings, args: argparse.Namespace) -> int:
     from .services.faces import FaceService
     from .services.vision import VisionService
 
-    vision = VisionService(
-        components.camera, components.detector, components.reader, settings.camera, settings.vision
-    )
+    camera = components.camera
+    continuous = None
+    if args.preview:
+        if camera is None:
+            print("--preview needs a camera; continuing without the preview window.")
+        else:
+            from .hal.camera import ContinuousCamera
+
+            # One reader thread feeds both the preview and the assistant.
+            continuous = camera = ContinuousCamera(camera)
+    vision = VisionService(camera, components.detector, components.reader, settings.camera, settings.vision)
     faces = None
     if components.face_encoder is not None:
         faces = FaceService(
@@ -356,7 +369,20 @@ async def run_assistant(settings: Settings, args: argparse.Namespace) -> int:
             max_samples_per_person=settings.face.max_samples_per_person,
         )
 
-    speech = SpeechQueue(components.tts)
+    translator = Translator(language)
+    preview = None
+    if continuous is not None:
+        from .preview import PreviewWindow
+
+        preview = PreviewWindow(
+            continuous, settings=settings, translator=translator, detector=components.detector, faces=faces
+        )
+        continuous.start()
+        preview.start()
+
+    speech = SpeechQueue(
+        components.tts, on_say=(lambda text, _priority: preview.said(text)) if preview is not None else None
+    )
     speech.start()
     listener = components.listener
 
@@ -367,7 +393,7 @@ async def run_assistant(settings: Settings, args: argparse.Namespace) -> int:
     assistant = Assistant(
         settings=settings,
         speech=speech,
-        translator=Translator(language),
+        translator=translator,
         vision=vision,
         faces=faces,
         navigator=components.navigator,
@@ -377,6 +403,7 @@ async def run_assistant(settings: Settings, args: argparse.Namespace) -> int:
         vlm_is_remote=components.vlm_remote,
         prefs=prefs,
         on_language_change=on_language_change,
+        monitor=preview,
     )
     warm_up = asyncio.create_task(vision.warm_up(), name="vision-warm-up")
     try:
@@ -384,7 +411,7 @@ async def run_assistant(settings: Settings, args: argparse.Namespace) -> int:
     finally:
         warm_up.cancel()
         await speech.close()
-        _close_quietly(listener, components.camera, components.tts)
+        _close_quietly(preview, listener, continuous, components.camera, components.tts)
         db.close()
     return 0
 

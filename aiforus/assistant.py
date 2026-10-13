@@ -22,6 +22,7 @@ from .hal.location import Location, LocationProvider
 from .hal.stt import SpeechInput, SpeechServiceError
 from .i18n import Translator
 from .intents import Intent, IntentRouter, IntentType
+from .monitor import Mark, Monitor, face_marks, object_marks, text_marks
 from .services.faces import EnrollStatus, FaceMatch, FaceService, normalize_name
 from .services.imaging import encode_jpeg
 from .services.llm import Answerer, VisionAnswerer, VisionTask
@@ -98,6 +99,7 @@ class Assistant:
         vlm_is_remote: bool = False,
         prefs: PreferenceStore | None = None,
         on_language_change: Callable[[str], object] | None = None,
+        monitor: Monitor | None = None,
     ) -> None:
         self.settings = settings
         self.speech = speech
@@ -113,6 +115,8 @@ class Assistant:
         self.vlm_is_remote = vlm_is_remote
         self.prefs = prefs
         self._on_language_change = on_language_change
+        # Optional live view (--preview); never affects what is spoken.
+        self.monitor = monitor
 
         self.running = True
         self.navigation: NavigationSession | None = None
@@ -158,6 +162,15 @@ class Assistant:
             logger.warning("Location lookup timed out")
             return None
 
+    def _show(self, frame: np.ndarray | None, marks: list[Mark] | None = None) -> None:
+        """Report the photo behind an answer to the live view, if any."""
+        if self.monitor is None or frame is None:
+            return
+        try:
+            self.monitor.answered(frame, marks or [])
+        except Exception:  # a display problem must never break an answer
+            logger.exception("Monitor failed")
+
     def _discard(self, ack: asyncio.Future[bool] | None) -> None:
         if ack is not None:
             self.speech.discard(ack)
@@ -196,6 +209,9 @@ class Assistant:
         await self.speech.wait_idle()
 
     async def handle(self, utterance: str) -> None:
+        if self.monitor is not None and utterance.strip():
+            with contextlib.suppress(Exception):
+                self.monitor.heard(utterance)
         intent = self.router.parse(utterance)
         logger.debug("INTENT %s %s", intent.type.value, intent.slots or "")
         if intent.type is IntentType.EMPTY:
@@ -299,6 +315,7 @@ class Assistant:
         placements = with_face_distances(
             placements, look.detections, faces or [], width, height, fov, self.settings.vision.face_height_m
         )
+        self._show(look.frame, object_marks(look.detections, placements, self.tr))
         groups = group_placements(placements)
         limit = self.settings.vision.max_objects_spoken
         sentences = []
@@ -346,6 +363,7 @@ class Assistant:
         if look.detections:
             self.speech.say(self._describe_objects(look, await self._face_boxes(look)), Priority.HIGH)
         else:
+            self._show(look.frame)
             self.say("scene_nothing")
         if look.texts:
             self.say("scene_has_text", Priority.NORMAL)
@@ -357,6 +375,7 @@ class Assistant:
         if look.detections:
             self.speech.say(self._describe_objects(look, await self._face_boxes(look)), Priority.HIGH)
         else:
+            self._show(look.frame)
             self.say("scene_nothing")
 
     async def _read_text(self, intent: Intent) -> None:
@@ -366,6 +385,7 @@ class Assistant:
         if not look.texts:
             await self._no_text_found(look)
             return
+        self._show(look.frame, text_marks(look.texts))
         limit = self.settings.vision.max_text_regions_spoken
         self.say("text_found", count=len(look.texts))
         for region in look.texts[:limit]:
@@ -400,6 +420,8 @@ class Assistant:
             return
         matches = await asyncio.to_thread(self.faces.identify, frame)
         self.speech.discard(ack)
+        placed = self._place_faces(matches, frame)
+        self._show(frame, face_marks(placed, self.tr))
         if not matches:
             self.say("faces_none")
             return
@@ -407,14 +429,16 @@ class Assistant:
             self.say("faces_seen_one")
         else:
             self.say("faces_seen", count=len(matches))
-        for sentence in self._describe_faces(matches, frame):
+        for sentence in self._describe_faces(placed):
             self.speech.say(sentence, Priority.HIGH)
 
     # Up to this many unknown people are placed one by one; more are counted.
     MAX_UNKNOWN_PLACED = 2
 
-    def _describe_faces(self, matches: list[FaceMatch], frame: np.ndarray) -> list[str]:
-        """ "Kaffa di jam 12, sekitar 1 meter." - known people first, nearest first."""
+    def _place_faces(
+        self, matches: list[FaceMatch], frame: np.ndarray
+    ) -> list[tuple[FaceMatch, int, float | None]]:
+        """(match, clock, distance) - known people first, nearest first."""
         height, width = frame.shape[:2]
         placed = []
         for match in matches:
@@ -431,7 +455,10 @@ class Assistant:
             )
             placed.append((match, clock, distance))
         placed.sort(key=lambda p: (p[0].name is None, p[2] if p[2] is not None else float("inf")))
+        return placed
 
+    def _describe_faces(self, placed: list[tuple[FaceMatch, int, float | None]]) -> list[str]:
+        """ "Kaffa di jam 12, sekitar 1 meter." in the order of ``placed``."""
         sentences = []
         unknown = [p for p in placed if p[0].name is None]
         for match, clock, distance in placed:
@@ -632,6 +659,7 @@ class Assistant:
                 self._discard(ack)
                 self._vision_problem(status)
                 return
+        self._show(frame)
         if self.vlm_is_remote:
             # HIGH like the answer, so the answer can never jump ahead of it.
             self.say("vlm_cloud_notice", Priority.HIGH)

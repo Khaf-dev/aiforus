@@ -146,6 +146,7 @@ class Harness:
         language="id",
         vlm=None,
         vlm_is_remote=False,
+        monitor=None,
     ):
         self.tts = FakeTTS()
         self.speech = SpeechQueue(self.tts)
@@ -178,6 +179,7 @@ class Harness:
             vlm_is_remote=vlm_is_remote,
             prefs=self.prefs,
             on_language_change=self.language_changes.append,
+            monitor=monitor,
         )
         self.assistant.ENROLL_SETTLE_S = 0
         self.assistant.ENROLL_FRAME_INTERVAL_S = 0
@@ -724,3 +726,58 @@ async def test_known_face_in_english_with_distance(tmp_path):
         h.encoder.next = [v(1)]
         h.encoder.face_boxes = [face_at(2)]
         assert await h.say("who is this") == ["I see one face.", "Kaffa at 12 o'clock, about 2 meters."]
+
+
+# -- live view (--preview) --------------------------------------------------------
+
+
+class RecordingMonitor:
+    def __init__(self, fail=False):
+        self.heard_texts, self.answers, self.fail = [], [], fail
+
+    def heard(self, text):
+        self.heard_texts.append(text)
+
+    def said(self, text):
+        pass
+
+    def answered(self, frame, marks):
+        if self.fail:
+            raise RuntimeError("window closed")
+        self.answers.append((frame.shape, [(m.text, m.kind.value) for m in marks]))
+
+
+async def test_monitor_sees_command_photo_and_marks(tmp_path):
+    monitor = RecordingMonitor()
+    labels = [at("chair", 2, center_x=1100), at("person", 3)]
+    async with Harness(
+        tmp_path, frames=[textured_frame(size=HD)], labels=labels, texts=[], monitor=monitor
+    ) as h:
+        await h.say("apa di depan")
+    assert monitor.heard_texts == ["apa di depan"]
+    shape, marks = monitor.answers[0]
+    assert shape == (*HD, 3)
+    assert ("kursi | jam 1 | ~2 m", "object") in marks
+    assert ("orang | jam 12 | ~3 m", "object") in marks
+
+
+async def test_monitor_gets_named_faces(tmp_path):
+    monitor = RecordingMonitor()
+    async with Harness(tmp_path, frames=[textured_frame(size=HD)], monitor=monitor) as h:
+        h.assistant.faces.add_samples("Kaffa", [v(1)])
+        h.encoder.next = [v(1), v(9)]
+        h.encoder.face_boxes = [face_at(2, 640), face_at(3, 200)]
+        await h.say("siapa ini")
+    _, marks = monitor.answers[-1]
+    assert marks == [("Kaffa | jam 12 | ~2 m", "known"), ("belum dikenal | jam 11 | ~3 m", "unknown")]
+
+
+async def test_broken_monitor_never_breaks_an_answer(tmp_path):
+    async with Harness(
+        tmp_path,
+        frames=[textured_frame(size=HD)],
+        labels=[at("chair", 2)],
+        texts=[],
+        monitor=RecordingMonitor(fail=True),
+    ) as h:
+        assert await h.say("benda apa") == ["Kursi di jam 12, sekitar 2 meter."]
