@@ -174,6 +174,7 @@ class Harness:
         )
         self.assistant.ENROLL_SETTLE_S = 0
         self.assistant.ENROLL_FRAME_INTERVAL_S = 0
+        self.assistant.LLM_TIMEOUT_MARGIN_S = 0
         self.settings.face.enroll_timeout_s = 0.3
 
     async def __aenter__(self):

@@ -38,9 +38,11 @@ async def test_more_urgent_item_interrupts_current_one():
     long = q.say("long description", Priority.NORMAL)
     await _until_started(tts)
     started = time.monotonic()
+    # Set before queueing: the worker may start "urgent" before this
+    # coroutine resumes after ``await long`` (the current wait keeps its 1 s).
+    tts.duration = 0.0
     urgent = q.say("urgent", Priority.HIGH)
     assert await long is False
-    tts.duration = 0.0
     assert await urgent is True
     assert time.monotonic() - started < 0.5
     assert tts.interrupted == ["long description"]

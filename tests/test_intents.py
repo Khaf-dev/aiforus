@@ -39,6 +39,13 @@ T = IntentType
         ("what does it say", T.READ_TEXT),
         # Faces
         ("siapa ini", T.RECOGNIZE_FACES),
+        # Found in the Windows test: "ini siapa" went to the LLM.
+        ("ini siapa", T.RECOGNIZE_FACES),
+        ("Itu siapa?", T.RECOGNIZE_FACES),
+        ("dia siapa ya", T.RECOGNIZE_FACES),
+        ("siapa orang ini", T.RECOGNIZE_FACES),
+        ("orang itu siapa", T.RECOGNIZE_FACES),
+        ("ini siapa yang bikin lagunya", T.GENERAL_QUESTION),
         ("who's there?", T.RECOGNIZE_FACES),
         ("siapa saja yang kamu kenal", T.LIST_FACES),
         ("who do you know", T.LIST_FACES),

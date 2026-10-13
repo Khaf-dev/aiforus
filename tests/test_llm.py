@@ -158,6 +158,51 @@ async def test_look_sends_image_as_data_url(fake_openai):
     assert image["image_url"]["url"] == "data:image/jpeg;base64,/9hqcGVn"
 
 
+async def test_requests_have_own_timeout_and_no_retries(fake_openai):
+    """A retry re-sends the whole image request; the Windows test showed the
+    first (model-loading) request being cut off at the chat timeout and
+    started again."""
+    from aiforus.services.llm import VisionTask
+
+    answerer = OpenAIAnswerer(
+        api_key="x", model="gemma3:4b", timeout_s=30, max_tokens=50, vision_timeout_s=75
+    )
+    await answerer.answer("halo", "id")
+    await answerer.look(b"jpeg", VisionTask.DESCRIBE, "id")
+    client = fake_openai.instances[0]
+    assert client.kwargs["max_retries"] == 0
+    assert [r["timeout"] for r in client.requests] == [30, 75]
+
+
+async def test_answer_knows_today_and_hedges_on_changing_facts(fake_openai):
+    from datetime import date
+
+    answerer = OpenAIAnswerer(
+        api_key="x", model="m", timeout_s=30, max_tokens=50, today=lambda: date(2026, 10, 13)
+    )
+    await answerer.answer("siapa presiden indonesia", "id")
+    system = fake_openai.instances[0].requests[0]["messages"][0]["content"]
+    assert "Today is Tuesday, 13 October 2026." in system
+    assert "may be out of date" in system
+    assert "do not ask follow-up questions" in system
+
+
+@pytest.mark.parametrize(
+    "language, phrase, absent",
+    [("id", "di arah jam 3", "o'clock"), ("en", "at 3 o'clock", "di arah jam")],
+)
+async def test_vision_prompt_uses_clock_wording_of_the_reply_language(fake_openai, language, phrase, absent):
+    """gemma3 translated "3 o'clock" literally as "di 3 jam" (= in 3 hours)."""
+    from aiforus.services.llm import VisionTask
+
+    answerer = OpenAIAnswerer(api_key="x", model="m", timeout_s=30, max_tokens=50)
+    await answerer.look(b"jpeg", VisionTask.DESCRIBE, language)
+    system, user = fake_openai.instances[0].requests[0]["messages"]
+    assert phrase in system["content"]
+    assert absent not in system["content"]
+    assert "clock positions" in user["content"][0]["text"]
+
+
 def test_vision_model_defaults_to_chat_model(fake_openai):
     answerer = OpenAIAnswerer(api_key="x", model="gemma3:4b", timeout_s=30, max_tokens=50)
     assert answerer._vision_model == "gemma3:4b"

@@ -217,6 +217,7 @@ def _build_answerer(c: Components, s: Settings) -> Any:
             max_tokens=s.llm.max_tokens,
             vision_model=s.llm.vision_model,
             vision_max_tokens=s.llm.vision_max_tokens,
+            vision_timeout_s=s.llm.vision_timeout_s,
         ),
     )
     if answerer is not None:

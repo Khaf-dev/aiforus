@@ -76,6 +76,9 @@ class Assistant:
     LOCATION_TIMEOUT_S = 5.0
     ENROLL_SETTLE_S = 1.0  # pause between "hold still" and taking the photos
     ENROLL_FRAME_INTERVAL_S = 0.25  # gap between enrollment frames
+    # The LLM client enforces the configured timeouts itself; ours is only a
+    # safety net, a little later so the client's clearer error wins.
+    LLM_TIMEOUT_MARGIN_S = 2.0
 
     def __init__(
         self,
@@ -563,7 +566,8 @@ class Assistant:
         try:
             image = await asyncio.to_thread(encode_jpeg, frame, self.settings.llm.image_max_side)
             answer = await asyncio.wait_for(
-                self.vlm.look(image, task, self.tr.language, question), self.settings.llm.vision_timeout_s
+                self.vlm.look(image, task, self.tr.language, question),
+                self.settings.llm.vision_timeout_s + self.LLM_TIMEOUT_MARGIN_S,
             )
         except Exception:
             logger.exception("Vision model request failed")
@@ -586,7 +590,8 @@ class Assistant:
         question = intent.slots.get("question", intent.text)
         try:
             answer = await asyncio.wait_for(
-                self.answerer.answer(question, self.tr.language), self.settings.llm.timeout_s + 2
+                self.answerer.answer(question, self.tr.language),
+                self.settings.llm.timeout_s + self.LLM_TIMEOUT_MARGIN_S,
             )
         except Exception:
             logger.exception("LLM request failed")

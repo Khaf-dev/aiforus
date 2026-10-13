@@ -9,6 +9,8 @@ from __future__ import annotations
 import base64
 import ipaddress
 import logging
+from collections.abc import Callable
+from datetime import date
 from enum import Enum
 from typing import Any, Protocol
 from urllib.parse import urlparse
@@ -21,11 +23,14 @@ _LANGUAGE_NAMES = {"id": "Bahasa Indonesia", "en": "English"}
 
 SYSTEM_PROMPT = (
     "You are the voice of AIForUs, an assistant used by blind and low-vision people. "
-    "Reply in {language}. Your reply is read aloud: at most three short sentences, "
-    "no lists, no markdown, no URLs. You cannot see the user's surroundings in this "
-    "conversation; if a question needs sight, say so and suggest the camera commands. "
-    "Never tell the user that crossing a road, walking somewhere, or any physical action "
-    "is safe."
+    "Today is {today}. Reply in {language}. Your reply is read aloud: at most three short "
+    "sentences, no lists, no markdown, no URLs. Answer only what was asked: do not offer "
+    "more help and do not ask follow-up questions. Your knowledge stops at your training "
+    "date and you cannot browse the internet, so for anything that changes over time (who "
+    "holds an office, prices, news, schedules, weather) say clearly that your information "
+    "may be out of date. You cannot see the user's surroundings in this conversation; if a "
+    "question needs sight, say so and suggest the camera commands. Never tell the user that "
+    "crossing a road, walking somewhere, or any physical action is safe."
 )
 
 
@@ -49,16 +54,30 @@ VISION_SYSTEM_PROMPT = (
     "You are the eyes of AIForUs, an assistant for blind and low-vision people. "
     "You get one photo from the user's camera (held or worn at chest/eye level). "
     "Reply in {language}. Your reply is read aloud: plain sentences, no lists, no markdown. "
+    "{clock_hint} "
     "Only describe what is actually visible; if something is unclear or cut off, say so "
     "instead of guessing. Never say that a path is clear, that there are no obstacles, or "
     "that anything is safe."
 )
 
+# Written in the reply language: small models copy the example's wording, and
+# translating "at 3 o'clock" literally gave "di 3 jam" (= "in 3 hours").
+CLOCK_HINTS = {
+    "id": (
+        "Untuk arah, pakai posisi jam dengan kalimat seperti 'di arah jam 3': jam 12 lurus di "
+        "depan, jam 3 di kanan, jam 9 di kiri. Jangan menulis 'di 3 jam' atau '3 jam'."
+    ),
+    "en": (
+        "For directions use clock positions, phrased like 'at 3 o'clock': 12 o'clock is straight "
+        "ahead, 3 o'clock is to the right, 9 o'clock is to the left."
+    ),
+}
+
 VISION_TASKS = {
     VisionTask.DESCRIBE: (
         "Describe this scene in 3 to 5 short sentences: what kind of place it is, the main "
-        "objects and people, and where they are using clock directions (12 o'clock is straight "
-        "ahead, 3 o'clock is right, 9 o'clock is left). Mention important visible text."
+        "objects and people, and where they are, using clock positions. Mention important "
+        "visible text."
     ),
     VisionTask.READ_DOCUMENT: (
         "Read the text in this image aloud in natural reading order, exactly as written. "
@@ -70,6 +89,18 @@ VISION_TASKS = {
         "If you cannot tell from the image, say so."
     ),
 }
+
+
+_WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+_MONTHS = (
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+)  # fmt: skip
+
+
+def english_date(day: date) -> str:
+    """ "Tuesday, 13 October 2026" - independent of the OS locale."""
+    return f"{_WEEKDAYS[day.weekday()]}, {day.day} {_MONTHS[day.month - 1]} {day.year}"
 
 
 def is_local_endpoint(base_url: str | None) -> bool:
@@ -107,31 +138,41 @@ class OpenAIAnswerer:
         base_url: str | None = None,
         vision_model: str | None = None,
         vision_max_tokens: int = 400,
+        vision_timeout_s: float = 60.0,
+        today: Callable[[], date] = date.today,
     ) -> None:
         try:
             import openai
         except ImportError as exc:
             raise ComponentUnavailable("openai is not installed (pip install -e .[llm])") from exc
+        # No automatic retries: a retry starts the whole request again (the
+        # model re-reads the image), so the user would wait twice as long.
+        # Each request carries its own timeout instead (see below).
         self._client: Any = openai.AsyncOpenAI(
-            api_key=api_key, base_url=base_url, timeout=timeout_s, max_retries=1
+            api_key=api_key, base_url=base_url, timeout=timeout_s, max_retries=0
         )
         self._model = model
         self._max_tokens = max_tokens
+        self._timeout_s = timeout_s
         self._vision_model = vision_model or model
         self._vision_max_tokens = vision_max_tokens
+        # Image requests are slower, and the first one also loads the model.
+        self._vision_timeout_s = vision_timeout_s
+        self._today = today
 
     async def answer(self, question: str, language: str) -> str:
+        system = SYSTEM_PROMPT.format(
+            language=_LANGUAGE_NAMES.get(language, "English"), today=english_date(self._today())
+        )
         response = await self._client.chat.completions.create(
             model=self._model,
             messages=[
-                {
-                    "role": "system",
-                    "content": SYSTEM_PROMPT.format(language=_LANGUAGE_NAMES.get(language, "English")),
-                },
+                {"role": "system", "content": system},
                 {"role": "user", "content": question},
             ],
             temperature=0.4,
             max_tokens=self._max_tokens,
+            timeout=self._timeout_s,
         )
         return (response.choices[0].message.content or "").strip()
 
@@ -147,7 +188,10 @@ class OpenAIAnswerer:
             messages=[
                 {
                     "role": "system",
-                    "content": VISION_SYSTEM_PROMPT.format(language=_LANGUAGE_NAMES.get(language, "English")),
+                    "content": VISION_SYSTEM_PROMPT.format(
+                        language=_LANGUAGE_NAMES.get(language, "English"),
+                        clock_hint=CLOCK_HINTS.get(language, CLOCK_HINTS["en"]),
+                    ),
                 },
                 {
                     "role": "user",
@@ -159,5 +203,6 @@ class OpenAIAnswerer:
             ],
             temperature=0.2,
             max_tokens=self._vision_max_tokens,
+            timeout=self._vision_timeout_s,
         )
         return (response.choices[0].message.content or "").strip()

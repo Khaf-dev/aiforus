@@ -22,8 +22,10 @@ class FakeTTS:
         self._stop = threading.Event()
 
     def speak(self, text: str) -> None:
-        self.started.append(text)
+        # Reset before announcing the start: an interrupt that arrives right
+        # after ``started`` is visible must not be wiped out.
         self._stop.clear()
+        self.started.append(text)
         if self.fail_on is not None and self.fail_on in text:
             raise RuntimeError("engine exploded")
         if self._stop.wait(self.duration) if self.duration else False:
