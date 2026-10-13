@@ -88,6 +88,12 @@ class VisionSettings(_Section):
     ocr_confidence: float = Field(0.5, ge=0.0, le=1.0)
     max_objects_spoken: int = Field(6, ge=1)
     max_text_regions_spoken: int = Field(5, ge=1)
+    # What "baca tulisan" does when the quick OCR finds nothing (it misses
+    # small, distant or stylised text that a vision model can still read):
+    # vlm  = look again with the vision model, if one is available
+    # hint = suggest saying "baca dokumen"
+    # off  = just say no text was found
+    ocr_fallback: Literal["vlm", "hint", "off"] = "vlm"
     # Typical height of a detected face box (forehead to chin), used to
     # estimate how far away a person is from the size of their face. Works
     # even when their body is cut off by the frame. Calibrate if needed.

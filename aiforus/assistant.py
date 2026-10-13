@@ -15,6 +15,8 @@ import time
 from collections.abc import Awaitable, Callable
 from typing import Any, TypeVar
 
+import numpy as np
+
 from .config import SUPPORTED_LANGUAGES, Settings
 from .hal.location import Location, LocationProvider
 from .hal.stt import SpeechInput, SpeechServiceError
@@ -155,6 +157,10 @@ class Assistant:
         except asyncio.TimeoutError:
             logger.warning("Location lookup timed out")
             return None
+
+    def _discard(self, ack: asyncio.Future[bool] | None) -> None:
+        if ack is not None:
+            self.speech.discard(ack)
 
     def _vision_problem(self, status: VisionStatus) -> bool:
         key = _VISION_PROBLEMS.get(status)
@@ -358,7 +364,7 @@ class Assistant:
         if look is None:
             return
         if not look.texts:
-            self.say("text_none")
+            await self._no_text_found(look)
             return
         limit = self.settings.vision.max_text_regions_spoken
         self.say("text_found", count=len(look.texts))
@@ -366,6 +372,19 @@ class Assistant:
             self.speech.say(region.text, Priority.HIGH)
         if len(look.texts) > limit:
             self.say("text_more", Priority.NORMAL, count=len(look.texts) - limit)
+
+    async def _no_text_found(self, look: Look) -> None:
+        """OCR misses small, distant or stylised text (a shop sign, a label at
+        an angle) that the vision model can often still read."""
+        mode = self.settings.vision.ocr_fallback
+        if mode == "vlm" and self.vlm is not None and look.frame is not None:
+            self.say("text_try_vlm", Priority.HIGH)  # not cut off by the answer
+            # Same photo, so the answer is about what the user pointed at.
+            await self._ask_vlm(VisionTask.READ_DOCUMENT, frame=look.frame, acknowledge=False)
+            return
+        self.say("text_none")
+        if mode != "off" and self.vlm is not None:
+            self.say("text_hint_document", Priority.NORMAL)
 
     # -- faces -------------------------------------------------------------
 
@@ -548,21 +567,32 @@ class Assistant:
     async def _visual_question(self, intent: Intent) -> None:
         await self._ask_vlm(VisionTask.QUESTION, intent.slots.get("question"))
 
-    async def _ask_vlm(self, task: VisionTask, question: str | None = None) -> None:
+    async def _ask_vlm(
+        self,
+        task: VisionTask,
+        question: str | None = None,
+        *,
+        frame: np.ndarray | None = None,
+        acknowledge: bool = True,
+    ) -> None:
+        """Ask the vision model about ``frame``, or a fresh photo if None."""
         if self.vlm is None:
             self.say("vlm_unavailable")
             return
-        if self.vision is None or not self.vision.can():
+        if frame is None and (self.vision is None or not self.vision.can()):
             self.say("vision_unavailable")
             return
-        ack = self.say("vlm_looking", Priority.LOW)
-        status, frame = await self.vision.capture()
+        ack = self.say("vlm_looking", Priority.LOW) if acknowledge else None
         if frame is None:
-            self.speech.discard(ack)
-            self._vision_problem(status)
-            return
+            assert self.vision is not None
+            status, frame = await self.vision.capture()
+            if frame is None:
+                self._discard(ack)
+                self._vision_problem(status)
+                return
         if self.vlm_is_remote:
-            self.say("vlm_cloud_notice", Priority.NORMAL)
+            # HIGH like the answer, so the answer can never jump ahead of it.
+            self.say("vlm_cloud_notice", Priority.HIGH)
         try:
             image = await asyncio.to_thread(encode_jpeg, frame, self.settings.llm.image_max_side)
             answer = await asyncio.wait_for(
@@ -571,10 +601,10 @@ class Assistant:
             )
         except Exception:
             logger.exception("Vision model request failed")
-            self.speech.discard(ack)
+            self._discard(ack)
             self.say("vlm_error")
             return
-        self.speech.discard(ack)
+        self._discard(ack)
         if answer:
             self.speech.say(answer, Priority.HIGH)
         else:

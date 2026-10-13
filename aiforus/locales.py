@@ -51,6 +51,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "distance_under_1m": "kurang dari 1 meter",
         "text_found": "Aku menemukan {count} tulisan.",
         "text_none": "Aku tidak menemukan tulisan yang bisa dibaca.",
+        "text_try_vlm": "Tulisannya tidak terbaca dengan cara cepat. Aku coba lihat lebih teliti.",
+        "text_hint_document": "Coba katakan 'baca dokumen' supaya aku membaca lebih teliti.",
         "text_more": "Masih ada {count} tulisan lain yang tidak aku bacakan.",
         # Faces
         "faces_unavailable": "Pengenalan wajah belum terpasang di perangkat ini.",
@@ -180,6 +182,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "distance_under_1m": "less than 1 meter",
         "text_found": "I found {count} pieces of text.",
         "text_none": "I didn't find any readable text.",
+        "text_try_vlm": "I couldn't read it the quick way. Let me look more closely.",
+        "text_hint_document": "Try saying 'read the document' for a closer look.",
         "text_more": "There are {count} more pieces of text I didn't read.",
         "faces_unavailable": "Face recognition is not installed on this device.",
         "faces_none": "I don't see any faces.",

@@ -629,3 +629,49 @@ async def test_vlm_unavailable_error_and_camera_problems(tmp_path, fake_jpeg):
         ]
     async with Harness(tmp_path, vlm=StubVLM(reply="")) as h:
         assert await h.say("jelaskan lebih detail") == ["Aku tidak bisa menjelaskan gambar ini."]
+
+
+# -- OCR found nothing ----------------------------------------------------------
+
+
+async def test_unreadable_text_falls_back_to_the_vision_model(tmp_path, fake_jpeg):
+    """The Windows test: EasyOCR read nothing on a shop sign the VLM could read."""
+    from aiforus.services.llm import VisionTask
+
+    vlm = StubVLM(reply="Tulisannya: WARUNG OP MAMANG.")
+    frame = textured_frame()
+    async with Harness(tmp_path, frames=[frame], texts=[], vlm=vlm) as h:
+        camera = h.assistant.vision.camera
+        assert await h.say("baca tulisan") == [
+            "Tulisannya tidak terbaca dengan cara cepat. Aku coba lihat lebih teliti.",
+            "Tulisannya: WARUNG OP MAMANG.",
+        ]
+        assert camera.captures == 1  # the same photo, not a new one
+    assert [c[1] for c in vlm.calls] == [VisionTask.READ_DOCUMENT]
+
+
+async def test_unreadable_text_hint_mode_and_off(tmp_path, fake_jpeg):
+    vlm = StubVLM()
+    async with Harness(tmp_path, texts=[], vlm=vlm) as h:
+        h.settings.vision.ocr_fallback = "hint"
+        assert await h.say("baca tulisan") == [
+            "Aku tidak menemukan tulisan yang bisa dibaca.",
+            "Coba katakan 'baca dokumen' supaya aku membaca lebih teliti.",
+        ]
+        h.settings.vision.ocr_fallback = "off"
+        assert await h.say("baca tulisan") == ["Aku tidak menemukan tulisan yang bisa dibaca."]
+    assert vlm.calls == []
+
+
+async def test_unreadable_text_without_vision_model_says_so_plainly(tmp_path):
+    async with Harness(tmp_path, texts=[]) as h:
+        for mode in ("vlm", "hint"):
+            h.settings.vision.ocr_fallback = mode
+            assert await h.say("baca tulisan") == ["Aku tidak menemukan tulisan yang bisa dibaca."]
+
+
+async def test_unreadable_text_fallback_to_cloud_model_is_announced(tmp_path, fake_jpeg):
+    async with Harness(tmp_path, texts=[], vlm=StubVLM(reply="Ok."), vlm_is_remote=True) as h:
+        spoken = await h.say("baca tulisan")
+        assert "Fotonya aku kirim ke layanan AI di internet." in spoken
+        assert spoken[-1] == "Ok."
