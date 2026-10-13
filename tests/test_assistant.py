@@ -937,3 +937,30 @@ async def test_assistant_answers_to_its_name(tmp_path):
         h.settings.app.assistant_name = "Nemo"
         spoken = await h.say("hai nemo, bantuan")
         assert spoken[0].startswith("Ini yang bisa aku lakukan")
+
+
+@pytest.mark.parametrize(
+    "mode, key, expected",
+    [
+        (
+            "wake_word",
+            "space",
+            "Panggil aku dengan 'Hai Nemo', lalu sebutkan perintahnya. "
+            "Atau tekan spasi untuk bicara, juga untuk memotong aku.",
+        ),
+        ("wake_word", None, "Panggil aku dengan 'Hai Nemo', lalu sebutkan perintahnya."),
+        (
+            "push_to_talk",
+            "space",
+            "Tekan spasi, lalu sebutkan perintahnya. Tombol itu juga untuk memotong aku.",
+        ),
+        ("always", None, None),
+        ("text", None, None),
+    ],
+)
+async def test_help_says_how_to_call_the_assistant(tmp_path, mode, key, expected):
+    async with Harness(tmp_path) as h:
+        h.assistant.listening_mode, h.assistant.push_to_talk_label = mode, key
+        spoken = await h.say("bantuan")
+        assert spoken[0].startswith("Ini yang bisa aku lakukan")
+        assert (spoken[1] if len(spoken) > 1 else None) == expected

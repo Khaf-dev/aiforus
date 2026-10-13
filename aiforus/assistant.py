@@ -109,6 +109,8 @@ class Assistant:
         prefs: PreferenceStore | None = None,
         on_language_change: Callable[[str], object] | None = None,
         monitor: Monitor | None = None,
+        listening_mode: str = "text",
+        push_to_talk_label: str | None = None,
     ) -> None:
         self.settings = settings
         self.speech = speech
@@ -126,6 +128,10 @@ class Assistant:
         self._on_language_change = on_language_change
         # Optional live view (--preview); never affects what is spoken.
         self.monitor = monitor
+        # How the user gets the assistant's attention, for the spoken hints:
+        # "text" | "always" | "wake_word" | "push_to_talk".
+        self.listening_mode = listening_mode
+        self.push_to_talk_label = push_to_talk_label
 
         self.running = True
         self.navigation: NavigationSession | None = None
@@ -198,6 +204,9 @@ class Assistant:
 
     async def run(self, listener: SpeechInput) -> None:
         self.say("ready", Priority.NORMAL, name=self.settings.app.assistant_name)
+        hint = self._listening_hint()
+        if hint:
+            self.speech.say(hint, Priority.NORMAL)
         while self.running and not listener.closed:
             if listener.half_duplex:
                 # Don't transcribe our own voice.
@@ -289,6 +298,20 @@ class Assistant:
 
     async def _help(self, intent: Intent) -> None:
         self.say("help_menu")
+        hint = self._listening_hint()
+        if hint:
+            self.speech.say(hint, Priority.HIGH)
+
+    def _listening_hint(self) -> str:
+        """ "Panggil aku dengan 'Hai Nemo' ... atau tekan spasi." """
+        name = self.settings.app.assistant_name
+        key = self.tr.t(f"key_{self.push_to_talk_label}") if self.push_to_talk_label else None
+        if self.listening_mode == "wake_word":
+            hint = self.tr.t("hint_wake", name=name)
+            return f"{hint} {self.tr.t('hint_key_also', button=key)}" if key else hint
+        if self.listening_mode == "push_to_talk" and key:
+            return self.tr.t("hint_key", button=key)
+        return ""
 
     async def _change_language(self, intent: Intent) -> None:
         language = intent.slots.get("language", "unsupported")

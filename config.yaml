@@ -32,6 +32,22 @@ speech:
   piper_dir: "models/piper"
   piper_length_scale: 1.0   # > 1 speaks slower, < 1 faster
 
+listening:                # voice mode only; --text is unaffected
+  # wake_word: say "Hai Nemo" (or press the key) | push_to_talk: press the key | always: old behaviour
+  mode: "wake_word"
+  # vosk: works without training | openwakeword: trained models, see tools/wakeword/README.md
+  wake_engine: "vosk"
+  model_dir: "models"       # Vosk model in models/vosk, openWakeWord models in models/wakeword
+  vosk_model: "vosk-model-small-en-us-0.15"
+  openwakeword_wake_model: "hai_nemo.onnx"
+  openwakeword_emergency_model: "tolong.onnx"
+  wake_threshold: 0.5
+  emergency_without_name: true   # "tolong"/"darurat" (openWakeWord) or "help" (Vosk) without the name
+  push_to_talk_key: "space"      # space | enter | none (Windows console)
+  headset: false            # true: the name may interrupt the assistant while it speaks
+  beep: true
+  end_silence_s: 0.8
+
 camera:
   index: 0
   width: 1280

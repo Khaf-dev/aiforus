@@ -3,4 +3,4 @@
 #   pip install -r requirements.txt
 # The legacy dlib face backend is left out (it needs a C++ build); add it with
 #   pip install -e ".[faces]"
--e .[voice,piper,vision,llm]
+-e .[voice,wake,piper,vision,llm]

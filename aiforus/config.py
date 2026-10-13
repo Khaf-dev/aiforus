@@ -65,6 +65,33 @@ class SpeechSettings(_Section):
     piper_length_scale: float = Field(1.0, gt=0.3, le=3.0)  # > 1 speaks slower
 
 
+class ListeningSettings(_Section):
+    """When the assistant listens (voice mode only; ``--text`` is unaffected)."""
+
+    # wake_word: say the assistant's name ("Hai Nemo") or press the key
+    # push_to_talk: press the key, then speak
+    # always: every utterance is a command (all audio goes to the recogniser)
+    mode: Literal["wake_word", "push_to_talk", "always"] = "wake_word"
+    # vosk: works without training (English model; listens for the name and "help")
+    # openwakeword: trained ONNX models ("hai nemo", "tolong/darurat"), see tools/wakeword
+    wake_engine: Literal["vosk", "openwakeword"] = "vosk"
+    model_dir: Path = Path("models")
+    vosk_model: str = "vosk-model-small-en-us-0.15"
+    # English words closest to "hai" / "halo" for the Vosk model.
+    vosk_greetings: list[str] = Field(default_factory=lambda: ["hi", "hey", "hello"])
+    openwakeword_wake_model: str = "hai_nemo.onnx"
+    openwakeword_emergency_model: str = "tolong.onnx"
+    wake_threshold: float = Field(0.5, gt=0.0, lt=1.0)
+    # Hear "tolong"/"darurat" (openWakeWord) or "help" (Vosk) without the name.
+    emergency_without_name: bool = True
+    push_to_talk_key: Literal["space", "enter", "none"] = "space"
+    # With headphones the microphone can't hear the assistant, so its name
+    # may also interrupt it while it speaks.
+    headset: bool = False
+    beep: bool = True
+    end_silence_s: float = Field(0.8, ge=0.3, le=3.0)
+
+
 class CameraSettings(_Section):
     index: int = Field(0, ge=0)
     width: int | None = 1280
@@ -168,6 +195,7 @@ class EmergencySettings(_Section):
 class Settings(_Section):
     app: AppSettings = Field(default_factory=AppSettings)
     speech: SpeechSettings = Field(default_factory=SpeechSettings)
+    listening: ListeningSettings = Field(default_factory=ListeningSettings)
     camera: CameraSettings = Field(default_factory=CameraSettings)
     vision: VisionSettings = Field(default_factory=VisionSettings)
     face: FaceSettings = Field(default_factory=FaceSettings)
@@ -191,6 +219,11 @@ class Settings(_Section):
     @property
     def face_model_dir(self) -> Path:
         path = self.face.model_dir
+        return path if path.is_absolute() else PROJECT_ROOT / path
+
+    @property
+    def listening_model_dir(self) -> Path:
+        path = self.listening.model_dir
         return path if path.is_absolute() else PROJECT_ROOT / path
 
     @property

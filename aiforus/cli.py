@@ -118,7 +118,7 @@ def _build_voice(c: Components, s: Settings, language: str) -> Any:
 
 def build_components(settings: Settings, args: argparse.Namespace, language: str) -> Components:
     from .hal.camera import OpenCVCamera
-    from .hal.stt import GoogleSpeechInput, KeyboardInput
+    from .hal.stt import KeyboardInput
     from .hal.tts import PrintTTS
     from .services.faces import DlibFaceEncoder, OpenCVFaceEncoder
     from .services.navigation import Navigator
@@ -134,16 +134,7 @@ def build_components(settings: Settings, args: argparse.Namespace, language: str
         c.listener = KeyboardInput("Kamu: " if language == "id" else "You: ")
         c.status["voice input"] = "keyboard (--text)"
     else:
-        c.listener = _try(
-            c,
-            "voice input",
-            lambda: GoogleSpeechInput(
-                locales=s.speech.recognition_locale,
-                language=language,
-                timeout_s=s.speech.listen_timeout_s,
-                phrase_limit_s=s.speech.phrase_time_limit_s,
-            ),
-        )
+        c.listener = _build_listener(c, s, language)
 
     c.camera = _try(c, "camera", lambda: OpenCVCamera(s.camera))
     model = s.vision.detector_model
@@ -177,6 +168,98 @@ def build_components(settings: Settings, args: argparse.Namespace, language: str
     c.answerer = _build_answerer(c, s)
     c.vlm, c.vlm_remote = _build_vlm(c, s, c.answerer)
     return c
+
+
+_LISTENING = "listening"
+
+
+def _build_listener(c: Components, s: Settings, language: str) -> Any:
+    """Wake word and/or push-to-talk, falling back to always-on listening
+    when neither is available, so the user is never left unable to talk."""
+    from .hal.stt import GoogleSpeechInput
+
+    def always() -> Any:
+        return GoogleSpeechInput(
+            locales=s.speech.recognition_locale,
+            language=language,
+            timeout_s=s.speech.listen_timeout_s,
+            phrase_limit_s=s.speech.phrase_time_limit_s,
+        )
+
+    mode = s.listening.mode
+    if mode == "always":
+        c.status[_LISTENING] = "always (every utterance is sent to speech recognition)"
+        return _try(c, "voice input", always)
+
+    from .hal.listening import (
+        CommandRecorder,
+        ConsoleKey,
+        GoogleTranscriber,
+        PyAudioSource,
+        TriggeredSpeechInput,
+    )
+
+    key = None
+    if s.listening.push_to_talk_key != "none":
+        key = _try(c, "push-to-talk key", lambda: ConsoleKey(s.listening.push_to_talk_key))
+    detector = _build_wake_detector(c, s) if mode == "wake_word" else None
+    if detector is None and key is None:
+        c.status[_LISTENING] = "always - fallback: neither the wake word nor the key is available"
+        return _try(c, "voice input", always)
+    try:
+        source = PyAudioSource()
+        transcriber = GoogleTranscriber(s.speech.recognition_locale)
+    except ComponentUnavailable as exc:
+        c.status["voice input"] = f"unavailable - {exc}"
+        return None
+    c.status["voice input"] = "ok"
+    parts = []
+    if detector is not None:
+        parts.append(f"wake word 'Hai {s.app.assistant_name}' ({detector.name})")
+    if key is not None:
+        parts.append(f"push-to-talk [{key.label}]")
+    c.status[_LISTENING] = " + ".join(parts) + " - only commands are sent to speech recognition"
+    return TriggeredSpeechInput(
+        source,
+        transcriber,
+        language=language,
+        detector=detector,
+        key=key,
+        recorder=CommandRecorder(
+            start_timeout_s=s.speech.listen_timeout_s,
+            max_s=s.speech.phrase_time_limit_s,
+            end_silence_s=s.listening.end_silence_s,
+        ),
+        headset=s.listening.headset,
+        emergency=s.listening.emergency_without_name,
+    )
+
+
+def _build_wake_detector(c: Components, s: Settings) -> Any:
+    from .hal.listening import OpenWakeWordDetector, VoskWakeDetector
+
+    root = s.listening_model_dir
+    if s.listening.wake_engine == "openwakeword":
+        emergency = root / "wakeword" / s.listening.openwakeword_emergency_model
+        return _try(
+            c,
+            "wake word (openwakeword)",
+            lambda: OpenWakeWordDetector(
+                root / "wakeword" / s.listening.openwakeword_wake_model,
+                emergency if s.listening.emergency_without_name else None,
+                threshold=s.listening.wake_threshold,
+            ),
+        )
+    return _try(
+        c,
+        "wake word (vosk)",
+        lambda: VoskWakeDetector(
+            root / "vosk" / s.listening.vosk_model,
+            names=[s.app.assistant_name],
+            greetings=s.listening.vosk_greetings,
+            emergency_phrases=["help", "help me", "help help"] if s.listening.emergency_without_name else [],
+        ),
+    )
 
 
 _LLM = "general questions (LLM)"
@@ -284,6 +367,32 @@ def download_models(settings: Settings) -> int:
                 )
             )
 
+    listening = settings.listening
+    if listening.mode == "wake_word" and listening.wake_engine == "vosk":
+        from .downloads import download_and_extract_zip
+        from .hal.listening import VOSK_MODEL_URL
+
+        jobs.append(
+            (
+                f"wake word (vosk) {listening.vosk_model}",
+                lambda: download_and_extract_zip(
+                    VOSK_MODEL_URL.format(name=listening.vosk_model),
+                    settings.listening_model_dir / "vosk",
+                    listening.vosk_model,
+                    progress=report,
+                ),
+            )
+        )
+    if listening.mode == "wake_word" and listening.wake_engine == "openwakeword":
+
+        def oww_base_models() -> str:
+            from openwakeword.utils import download_models as oww_download
+
+            oww_download()  # the shared feature models; your own models come from tools/wakeword
+            return "openWakeWord feature models"
+
+        jobs.append(("wake word (openwakeword) feature models", oww_base_models))
+
     failures = 0
     for title, job in jobs:
         print(title)
@@ -386,6 +495,7 @@ async def run_assistant(settings: Settings, args: argparse.Namespace) -> int:
     )
     speech.start()
     listener = components.listener
+    beeper = _attach_listener(listener, speech, settings)
 
     def on_language_change(lang: str) -> None:
         components.tts.set_language(lang)
@@ -405,6 +515,8 @@ async def run_assistant(settings: Settings, args: argparse.Namespace) -> int:
         prefs=prefs,
         on_language_change=on_language_change,
         monitor=preview,
+        listening_mode=_listening_mode(listener),
+        push_to_talk_label=getattr(getattr(listener, "key", None), "label", None),
     )
     warm_up = asyncio.create_task(vision.warm_up(), name="vision-warm-up")
     try:
@@ -412,9 +524,43 @@ async def run_assistant(settings: Settings, args: argparse.Namespace) -> int:
     finally:
         warm_up.cancel()
         await speech.close()
-        _close_quietly(preview, listener, continuous, components.camera, components.tts)
+        _close_quietly(preview, listener, beeper, continuous, components.camera, components.tts)
         db.close()
     return 0
+
+
+def _listening_mode(listener: Any) -> str:
+    from .hal.listening import TriggeredSpeechInput
+    from .hal.stt import KeyboardInput
+
+    if isinstance(listener, KeyboardInput):
+        return "text"
+    if isinstance(listener, TriggeredSpeechInput):
+        return "wake_word" if listener.detector is not None else "push_to_talk"
+    return "always"
+
+
+def _attach_listener(listener: Any, speech: SpeechQueue, settings: Settings) -> Any:
+    """On "Hai Nemo" / the key: stop talking and beep, then listen."""
+    from .hal.listening import Beeper, Trigger, TriggeredSpeechInput
+
+    if not isinstance(listener, TriggeredSpeechInput):
+        return None
+    beeper = None
+    if settings.listening.beep:
+        try:
+            beeper = Beeper()
+        except ComponentUnavailable as exc:
+            logger.warning("No listening beep: %s", exc)
+    loop = asyncio.get_running_loop()
+
+    def on_trigger(trigger: Trigger) -> None:  # runs on the listener thread
+        loop.call_soon_threadsafe(speech.stop_all)
+        if beeper is not None and trigger is not Trigger.EMERGENCY:
+            beeper.play()
+
+    listener.attach(on_trigger=on_trigger, is_speaking=lambda: speech.is_speaking)
+    return beeper
 
 
 def _quiet_third_party_noise() -> None:

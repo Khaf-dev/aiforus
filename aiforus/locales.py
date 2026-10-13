@@ -12,6 +12,11 @@ MESSAGES: dict[str, dict[str, str]] = {
         # General
         "ready": "{name} siap. Katakan 'bantuan' untuk daftar perintah.",
         "attention": "Ya?",
+        "hint_wake": "Panggil aku dengan 'Hai {name}', lalu sebutkan perintahnya.",
+        "hint_key_also": "Atau tekan {button} untuk bicara, juga untuk memotong aku.",
+        "hint_key": "Tekan {button}, lalu sebutkan perintahnya. Tombol itu juga untuk memotong aku.",
+        "key_space": "spasi",
+        "key_enter": "Enter",
         "unknown": "Maaf, aku belum paham. Katakan 'bantuan' untuk daftar perintah.",
         "error": "Maaf, terjadi kesalahan. Coba lagi.",
         "help_menu": (
@@ -171,6 +176,11 @@ MESSAGES: dict[str, dict[str, str]] = {
     "en": {
         "ready": "{name} is ready. Say 'help menu' for the list of commands.",
         "attention": "Yes?",
+        "hint_wake": "Call me with 'Hey {name}', then say the command.",
+        "hint_key_also": "Or press {button} to talk, also to interrupt me.",
+        "hint_key": "Press {button}, then say the command. It also interrupts me.",
+        "key_space": "the space bar",
+        "key_enter": "Enter",
         "unknown": "Sorry, I didn't understand. Say 'help menu' for the list of commands.",
         "error": "Sorry, something went wrong. Please try again.",
         "help_menu": (
