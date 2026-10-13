@@ -258,3 +258,50 @@ async def test_yes_no_questions_must_start_with_a_clear_verdict(fake_openai, lan
     await answerer.look(b"jpeg", VisionTask.DESCRIBE, language)
     text = fake_openai.instances[0].requests[1]["messages"][1]["content"][0]["text"]
     assert verdicts[0] not in text
+
+
+class _JsonModeRejected(Exception):
+    pass
+
+
+_JsonModeRejected.__name__ = "BadRequestError"
+
+
+async def test_find_asks_for_json_and_parses_the_verdict(fake_openai, monkeypatch):
+    from aiforus.services.presence import Presence, Verdict
+
+    replies = iter(['{"visible": "yes", "clock": 11, "detail": "di kiri laptop"}'])
+
+    async def create(**kwargs):
+        client.requests.append(kwargs)
+        message = types.SimpleNamespace(content=next(replies))
+        return types.SimpleNamespace(choices=[types.SimpleNamespace(message=message)])
+
+    answerer = OpenAIAnswerer(api_key="x", model="m", timeout_s=30, max_tokens=50, vision_timeout_s=70)
+    client = fake_openai.instances[0]
+    monkeypatch.setattr(client.chat.completions, "create", create)
+    presence = await answerer.find(b"jpeg", "kunci", "id")
+    assert presence == Presence(Verdict.YES, 11, "di kiri laptop")
+    request = client.requests[0]
+    assert request["response_format"] == {"type": "json_object"}
+    assert request["temperature"] == 0.0 and request["timeout"] == 70
+    text = request["messages"][1]["content"][0]["text"]
+    assert "Is there kunci in this photo?" in text and "Bahasa Indonesia" in text
+
+
+async def test_find_retries_without_json_mode_when_the_server_rejects_it(fake_openai, monkeypatch):
+    from aiforus.services.presence import Verdict
+
+    answerer = OpenAIAnswerer(api_key="x", model="m", timeout_s=30, max_tokens=50)
+    client = fake_openai.instances[0]
+
+    async def create(**kwargs):
+        client.requests.append(kwargs)
+        if "response_format" in kwargs:
+            raise _JsonModeRejected("response_format not supported")
+        message = types.SimpleNamespace(content='{"visible": "no", "clock": null, "detail": ""}')
+        return types.SimpleNamespace(choices=[types.SimpleNamespace(message=message)])
+
+    monkeypatch.setattr(client.chat.completions, "create", create)
+    assert (await answerer.find(b"jpeg", "kunci", "id")).verdict is Verdict.NOT_VISIBLE
+    assert ["response_format" in r for r in client.requests] == [True, False]

@@ -16,6 +16,7 @@ from typing import Any, Protocol
 from urllib.parse import urlparse
 
 from ..hal import ComponentUnavailable
+from .presence import PRESENCE_SYSTEM_PROMPT, PRESENCE_TASK, Presence, parse_presence
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +52,9 @@ class VisionAnswerer(Protocol):
     async def look(
         self, image_jpeg: bytes, task: VisionTask, language: str, question: str | None = None
     ) -> str: ...
+
+    async def find(self, image_jpeg: bytes, thing: str, language: str) -> Presence:
+        """Is ``thing`` in the photo? Structured, checked for contradictions."""
 
 
 VISION_SYSTEM_PROMPT = (
@@ -235,3 +239,46 @@ class OpenAIAnswerer:
             timeout=self._vision_timeout_s,
         )
         return (response.choices[0].message.content or "").strip()
+
+    async def find(self, image_jpeg: bytes, thing: str, language: str) -> Presence:
+        """ "Is there <thing>?" as a JSON verdict (see :mod:`.presence`).
+
+        JSON mode is requested where the server supports it (OpenAI, Ollama);
+        a server that rejects it is asked again without it. The reply is
+        parsed and checked either way, so free text can't sneak through.
+        """
+        data_url = "data:image/jpeg;base64," + base64.b64encode(image_jpeg).decode("ascii")
+        request: dict[str, Any] = {
+            "model": self._vision_model,
+            "messages": [
+                {"role": "system", "content": PRESENCE_SYSTEM_PROMPT},
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": PRESENCE_TASK.format(
+                                thing=thing.strip(), language=_LANGUAGE_NAMES.get(language, "English")
+                            ),
+                        },
+                        {"type": "image_url", "image_url": {"url": data_url}},
+                    ],
+                },
+            ],
+            "temperature": 0.0,  # a verdict, not prose
+            "max_tokens": 120,
+            "timeout": self._vision_timeout_s,
+        }
+        try:
+            response = await self._client.chat.completions.create(
+                **request, response_format={"type": "json_object"}
+            )
+        except Exception as exc:
+            if type(exc).__name__ != "BadRequestError":
+                raise
+            logger.info("Server rejected JSON mode (%s); asking without it", exc)
+            response = await self._client.chat.completions.create(**request)
+        reply = response.choices[0].message.content or ""
+        presence = parse_presence(reply)
+        logger.debug("Presence of %r: %s (raw: %s)", thing, presence, reply)
+        return presence

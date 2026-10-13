@@ -127,6 +127,14 @@ class StubVLM:
             raise self.error
         return self.reply
 
+    presence = None  # what find() returns; set per test
+
+    async def find(self, image_jpeg, thing, language):
+        self.calls.append((image_jpeg, "find", language, thing))
+        if self.error:
+            raise self.error
+        return self.presence
+
 
 class Harness:
     def __init__(
@@ -833,14 +841,49 @@ async def test_find_object_never_claims_it_is_absent(tmp_path):
         ]
 
 
-async def test_find_unknown_object_asks_the_vision_model(tmp_path, fake_jpeg):
-    from aiforus.services.llm import VisionTask
+async def test_find_unknown_object_asks_the_vision_model_for_a_verdict(tmp_path, fake_jpeg):
+    from aiforus.services.presence import Presence, Verdict
 
-    vlm = StubVLM(reply="Ya, ada kunci di meja, di arah jam 1.")
+    vlm = StubVLM()
+    vlm.presence = Presence(Verdict.YES, 10, "di samping gelas")
     async with Harness(tmp_path, vlm=vlm) as h:
-        assert await h.say("apakah ada kunci di meja") == ["Ya, ada kunci di meja, di arah jam 1."]
-    assert vlm.calls[0][1] is VisionTask.QUESTION
-    assert vlm.calls[0][3] == "apakah ada kunci di meja"
+        assert await h.say("apakah ada kunci di meja") == ["Ya. Kunci di meja di jam 10. Di samping gelas."]
+    assert vlm.calls == [(b"jpeg", "find", "id", "kunci di meja")]
+
+
+@pytest.mark.parametrize(
+    "presence, expected",
+    [
+        (("yes", None, ""), "Ya, aku melihat kunci."),
+        (("not_visible", None, ""), "Aku tidak melihat kunci di foto. Itu bukan berarti tidak ada."),
+        (
+            ("unsure", None, ""),
+            "Aku tidak yakin ada kunci atau tidak. Coba dekatkan kamera atau ubah sudutnya.",
+        ),
+    ],
+)
+async def test_presence_sentences_are_composed_by_the_assistant(tmp_path, fake_jpeg, presence, expected):
+    from aiforus.services.presence import Presence, Verdict
+
+    vlm = StubVLM()
+    verdict, clock, detail = presence
+    vlm.presence = Presence(Verdict(verdict), clock, detail)
+    async with Harness(tmp_path, vlm=vlm) as h:
+        assert await h.say("ada kunci nggak") == [expected]
+
+
+async def test_lihat_apakah_ada_is_a_presence_check_too(tmp_path, fake_jpeg):
+    from aiforus.services.presence import Presence, Verdict
+
+    vlm = StubVLM()
+    vlm.presence = Presence(Verdict.NOT_VISIBLE)
+    async with Harness(tmp_path, vlm=vlm, language="en") as h:
+        assert await h.say("look, is there a key on the table") == [
+            "I don't see key on the table in the photo. That doesn't mean it isn't there."
+        ]
+        await h.say("lihat, ini uang berapa")  # open questions stay free text
+    assert [c[1] for c in vlm.calls][0] == "find"
+    assert vlm.calls[1][3] == "ini uang berapa"
 
 
 async def test_find_unknown_object_without_vision_model(tmp_path):

@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import re
 import threading
 import time
 from collections.abc import Awaitable, Callable
@@ -27,6 +28,7 @@ from .services.faces import EnrollStatus, FaceMatch, FaceService, normalize_name
 from .services.imaging import encode_jpeg
 from .services.llm import Answerer, VisionAnswerer, VisionTask
 from .services.navigation import NavigationError, NavigationSession, Navigator, describe_step
+from .services.presence import Presence, Verdict
 from .services.spatial import face_position, group_placements, place, with_face_distances
 from .services.vision import Look, VisionService, VisionStatus, summarize
 from .speech import Priority, SpeechQueue
@@ -65,6 +67,13 @@ def run_in_daemon_thread(fn: Callable[[], T]) -> asyncio.Future[T]:
     threading.Thread(target=target, name="listener", daemon=True).start()
     return future
 
+
+# "apakah ada kunci di meja" / "is there a key" inside a "lihat, ..." question.
+_PRESENCE_QUESTION = re.compile(
+    r"^(?:(?:apakah|apa) )?ada (?!apa\b|siapa\b|berapa\b)(?P<thing>.+?)(?: (?:ya|nggak|gak|tidak))?$"
+    r"|^(?:is there|are there) (?P<thing_en>.+)$",
+    re.IGNORECASE,
+)
 
 _VISION_PROBLEMS = {
     VisionStatus.UNAVAILABLE: "vision_unavailable",
@@ -411,7 +420,7 @@ class Assistant:
         labels = self.tr.find_labels(thing)
         if not labels:
             if self.vlm is not None:
-                await self._ask_vlm(VisionTask.QUESTION, intent.text)
+                await self._ask_vlm(VisionTask.QUESTION, presence_of=thing)
             else:
                 self.say("find_unsupported", thing=thing)
             return
@@ -684,7 +693,15 @@ class Assistant:
         await self._ask_vlm(VisionTask.READ_DOCUMENT)
 
     async def _visual_question(self, intent: Intent) -> None:
-        await self._ask_vlm(VisionTask.QUESTION, intent.slots.get("question"))
+        question = intent.slots.get("question", "")
+        # "lihat, apakah ada kunci di meja?" is a presence question too.
+        match = _PRESENCE_QUESTION.match(question.strip())
+        if match:
+            await self._ask_vlm(
+                VisionTask.QUESTION, presence_of=match.group("thing") or match.group("thing_en")
+            )
+            return
+        await self._ask_vlm(VisionTask.QUESTION, question)
 
     async def _ask_vlm(
         self,
@@ -693,8 +710,13 @@ class Assistant:
         *,
         frame: np.ndarray | None = None,
         acknowledge: bool = True,
+        presence_of: str | None = None,
     ) -> None:
-        """Ask the vision model about ``frame``, or a fresh photo if None."""
+        """Ask the vision model about ``frame``, or a fresh photo if None.
+
+        With ``presence_of`` it is a structured "is there <thing>?" check whose
+        sentence is composed here, not by the model.
+        """
         if self.vlm is None:
             self.say("vlm_unavailable")
             return
@@ -715,9 +737,13 @@ class Assistant:
             self.say("vlm_cloud_notice", Priority.HIGH)
         try:
             image = await asyncio.to_thread(encode_jpeg, frame, self.settings.llm.image_max_side)
+            request = (
+                self.vlm.find(image, presence_of, self.tr.language)
+                if presence_of is not None
+                else self.vlm.look(image, task, self.tr.language, question)
+            )
             answer = await asyncio.wait_for(
-                self.vlm.look(image, task, self.tr.language, question),
-                self.settings.llm.vision_timeout_s + self.LLM_TIMEOUT_MARGIN_S,
+                request, self.settings.llm.vision_timeout_s + self.LLM_TIMEOUT_MARGIN_S
             )
         except Exception:
             logger.exception("Vision model request failed")
@@ -725,10 +751,26 @@ class Assistant:
             self.say("vlm_error")
             return
         self._discard(ack)
-        if answer:
+        if isinstance(answer, Presence):
+            self.speech.say(self._presence_sentence(answer, presence_of or ""), Priority.HIGH)
+        elif answer:
             self.speech.say(answer, Priority.HIGH)
         else:
             self.say("vlm_empty")
+
+    def _presence_sentence(self, presence: Presence, thing: str) -> str:
+        name = self.tr.object_name(thing)
+        if presence.verdict is Verdict.NOT_VISIBLE:
+            return self.tr.t("presence_not_visible", thing=name)
+        if presence.verdict is Verdict.UNSURE:
+            return self.tr.t("presence_unsure", thing=name)
+        if presence.clock is not None:
+            sentence = self.tr.t("presence_yes_at", thing=self.tr.capitalize(name), clock=presence.clock)
+        else:
+            sentence = self.tr.t("presence_yes", thing=name)
+        if presence.detail:
+            sentence += f" {self.tr.capitalize(presence.detail)}."
+        return sentence
 
     async def _sound(self, intent: Intent) -> None:
         self.say("sound_unavailable")

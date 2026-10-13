@@ -95,6 +95,11 @@ All notable changes to this project are documented here. The format follows
 - Yes/no questions to the vision model must start with "Ya." / "Tidak
   terlihat." / "Tidak yakin." - gemma3:4b had answered the same question
   twice with opposite, hedged sentences.
+- "Is there …?" checks by the vision model are now structured: the model
+  returns JSON (yes / no / unsure, clock, short detail) and the assistant
+  composes the sentence. Unreadable or self-contradictory replies ("Tidak
+  terlihat. Ada kunci di atas meja.") become "Aku tidak yakin …". JSON mode
+  is requested where supported, with a fallback for servers without it.
 - "ada berapa orang" / "how many people" counts with the camera instead of
   going to the LLM (as the whole question only) and answers with the number
   first: "Aku melihat 2 orang." With nobody in view: "Aku tidak melihat

@@ -66,6 +66,11 @@ MESSAGES: dict[str, dict[str, str]] = {
         "find_yes": "Ya.",
         "find_none": "Aku tidak melihat {thing} di kamera. Itu bukan berarti tidak ada.",
         "find_unsupported": "Aku belum bisa mencari {thing} dengan cepat. Coba katakan 'jelaskan lebih detail'.",
+        # Vision-model presence check; the model only gives a verdict.
+        "presence_yes_at": "Ya. {thing} di jam {clock}.",
+        "presence_yes": "Ya, aku melihat {thing}.",
+        "presence_not_visible": "Aku tidak melihat {thing} di foto. Itu bukan berarti tidak ada.",
+        "presence_unsure": "Aku tidak yakin ada {thing} atau tidak. Coba dekatkan kamera atau ubah sudutnya.",
         # Preview window labels (not spoken)
         "mark_clock": "jam {clock}",
         "mark_near": "sangat dekat",
@@ -216,6 +221,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "find_yes": "Yes.",
         "find_none": "I don't see any {thing} on the camera. That doesn't mean there isn't one.",
         "find_unsupported": "I can't search for {thing} quickly yet. Try saying 'describe it in detail'.",
+        "presence_yes_at": "Yes. {thing} at {clock} o'clock.",
+        "presence_yes": "Yes, I can see {thing}.",
+        "presence_not_visible": "I don't see {thing} in the photo. That doesn't mean it isn't there.",
+        "presence_unsure": "I'm not sure whether there is {thing}. Try moving the camera closer or changing the angle.",
         "mark_clock": "{clock} o'clock",
         "mark_near": "very close",
         "mark_unknown": "unknown",

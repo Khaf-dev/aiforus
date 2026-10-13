@@ -86,9 +86,17 @@ Needs the LLM settings (local Ollama by default, see
   (English: document, letter, menu, page, label, receipt, prescription,
   package, book). Plain "baca tulisan" tries the fast OCR first.
 - A question must **start** with *lihat* / *look*: "lihat, …".
-- Yes/no questions are answered starting with *"Ya."*, *"Tidak terlihat."* or
-  *"Tidak yakin."* ("Yes." / "Not visible." / "Not sure."), then where.
-  "Tidak terlihat" means not visible in the photo, not that it isn't there.
+- **"Is there …?"** questions the fast detector can't answer ("apakah ada
+  kunci di meja?", or "lihat, apakah ada …") get a checked verdict. The vision
+  model only fills in yes / not visible / not sure plus a position; the
+  sentence is composed by the assistant:
+  *"Ya. Kunci di jam 10."*, *"Aku tidak melihat kunci di foto. Itu bukan
+  berarti tidak ada."* or *"Aku tidak yakin ada kunci atau tidak. Coba
+  dekatkan kamera atau ubah sudutnya."* A reply that contradicts itself
+  becomes "not sure".
+- Other questions ("lihat, ini uang berapa?") are answered in the model's own
+  words; yes/no ones start with *"Ya."*, *"Tidak terlihat."* or *"Tidak
+  yakin."*.
   "lihat sekitar" is the fast scene description.
 - The model is told to describe only what is visible, say when something is
   unclear, and never claim a path is clear or something is safe. It can

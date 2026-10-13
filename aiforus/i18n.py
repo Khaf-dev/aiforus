@@ -71,7 +71,9 @@ class Translator:
 
     def object_name(self, name: str) -> str:
         """The object name without filler words: "any buses" -> "buses"."""
-        words = [w for w in name.lower().replace("-", " ").split() if w not in _FILLERS[self._language]]
+        words = name.lower().replace("-", " ").split()
+        while words and words[0] in _FILLERS[self._language]:  # only leading: "on the table" stays
+            words.pop(0)
         return " ".join(words) or name.strip()
 
     def find_labels(self, name: str) -> tuple[str, ...]:
