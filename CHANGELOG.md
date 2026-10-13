@@ -92,6 +92,9 @@ All notable changes to this project are documented here. The format follows
 - The "sending the photo to the internet" notice could be spoken after the
   answer; it is now always before it.
 - English: "I see 1 faces" → "I see one face".
+- Yes/no questions to the vision model must start with "Ya." / "Tidak
+  terlihat." / "Tidak yakin." - gemma3:4b had answered the same question
+  twice with opposite, hedged sentences.
 - "ada berapa orang" / "how many people" counts with the camera instead of
   going to the LLM (as the whole question only) and answers with the number
   first: "Aku melihat 2 orang." With nobody in view: "Aku tidak melihat

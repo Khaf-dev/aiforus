@@ -86,6 +86,9 @@ Needs the LLM settings (local Ollama by default, see
   (English: document, letter, menu, page, label, receipt, prescription,
   package, book). Plain "baca tulisan" tries the fast OCR first.
 - A question must **start** with *lihat* / *look*: "lihat, …".
+- Yes/no questions are answered starting with *"Ya."*, *"Tidak terlihat."* or
+  *"Tidak yakin."* ("Yes." / "Not visible." / "Not sure."), then where.
+  "Tidak terlihat" means not visible in the photo, not that it isn't there.
   "lihat sekitar" is the fast scene description.
 - The model is told to describe only what is visible, say when something is
   unclear, and never claim a path is clear or something is safe. It can

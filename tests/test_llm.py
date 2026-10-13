@@ -236,3 +236,25 @@ def test_build_vlm_privacy(fake_openai):
 
     c = cli.Components()
     assert cli._build_vlm(c, local, None) == (None, False)
+
+
+@pytest.mark.parametrize(
+    "language, verdicts",
+    [
+        ("id", ("'Ya.'", "'Tidak terlihat.'", "'Tidak yakin.'")),
+        ("en", ("'Yes.'", "'Not visible.'", "'Not sure.'")),
+    ],
+)
+async def test_yes_no_questions_must_start_with_a_clear_verdict(fake_openai, language, verdicts):
+    """Fourth Windows test: two opposite, hedged answers to the same question."""
+    from aiforus.services.llm import VisionTask
+
+    answerer = OpenAIAnswerer(api_key="x", model="m", timeout_s=30, max_tokens=50)
+    await answerer.look(b"jpeg", VisionTask.QUESTION, language, "apakah ada kunci di meja")
+    text = fake_openai.instances[0].requests[0]["messages"][1]["content"][0]["text"]
+    assert "apakah ada kunci di meja" in text
+    assert all(v in text for v in verdicts)
+    # Only questions get the verdict rule, not descriptions or documents.
+    await answerer.look(b"jpeg", VisionTask.DESCRIBE, language)
+    text = fake_openai.instances[0].requests[1]["messages"][1]["content"][0]["text"]
+    assert verdicts[0] not in text

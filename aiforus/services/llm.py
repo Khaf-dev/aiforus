@@ -94,7 +94,25 @@ VISION_TASKS = {
     ),
     VisionTask.QUESTION: (
         "Answer this question about the image in at most three short sentences: {question} "
-        "If you cannot tell from the image, say so."
+        "If you cannot tell from the image, say so. {answer_hint}"
+    ),
+}
+
+# A yes/no question must start with a clear verdict. gemma3:4b answered the
+# same question twice with opposite, hedged sentences ("no key visible" /
+# "there is a key, but I can't tell if it's on the table"). "Not visible" is
+# not "absent", so the negative answer is phrased that way.
+ANSWER_HINTS = {
+    "id": (
+        "Kalau pertanyaannya ya/tidak, mulai jawaban dengan tepat salah satu dari: 'Ya.', "
+        "'Tidak terlihat.', atau 'Tidak yakin.', lalu jelaskan singkat di mana. Pilih 'Tidak "
+        "yakin.' kalau bagian yang ditanyakan buram, tertutup, terpotong, atau kamu ragu. "
+        "Jangan membuat kalimat yang saling bertentangan."
+    ),
+    "en": (
+        "If it is a yes/no question, start your answer with exactly one of: 'Yes.', 'Not "
+        "visible.', or 'Not sure.', then say briefly where. Choose 'Not sure.' if the part in "
+        "question is blurry, hidden, cut off, or you have any doubt. Never contradict yourself."
     ),
 }
 
@@ -189,7 +207,10 @@ class OpenAIAnswerer:
     ) -> str:
         """Ask the vision model about one JPEG image (OpenAI image_url format,
         which Ollama's OpenAI-compatible endpoint also accepts)."""
-        instruction = VISION_TASKS[task].format(question=(question or "").strip())
+        instruction = VISION_TASKS[task].format(
+            question=(question or "").strip(),
+            answer_hint=ANSWER_HINTS.get(language, ANSWER_HINTS["en"]),
+        )
         data_url = "data:image/jpeg;base64," + base64.b64encode(image_jpeg).decode("ascii")
         response = await self._client.chat.completions.create(
             model=self._vision_model,
