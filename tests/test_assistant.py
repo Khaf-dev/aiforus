@@ -781,3 +781,34 @@ async def test_broken_monitor_never_breaks_an_answer(tmp_path):
         monitor=RecordingMonitor(fail=True),
     ) as h:
         assert await h.say("benda apa") == ["Kursi di jam 12, sekitar 2 meter."]
+
+
+# -- counting ------------------------------------------------------------------
+
+
+async def test_count_people_gives_the_number_first(tmp_path):
+    """Third Windows test: "ada berapa orang" listed places but no number."""
+    labels = [at("person", 3), at("person", 2, center_x=1000), at("chair", 2, center_x=200)]
+    async with Harness(tmp_path, frames=[textured_frame(size=HD)], labels=labels, texts=[]) as h:
+        spoken = await h.say("ada berapa orang")
+        assert spoken[0] == "Aku melihat 2 orang."
+        assert "Kursi" not in spoken[1] and spoken[1].startswith("Orang di jam 1")
+
+
+async def test_count_people_never_says_nobody_is_there(tmp_path):
+    async with Harness(
+        tmp_path, frames=[textured_frame(size=HD)], labels=[at("chair", 2)], texts=[], language="en"
+    ) as h:
+        assert await h.say("how many people") == ["I don't see anyone on the camera."]
+        h.assistant.vision.detector.items = [at("person", 3)]
+        assert await h.say("how many people") == [
+            "I see one person.",
+            "Person at 12 o'clock, about 3 meters.",
+        ]
+
+
+async def test_count_objects(tmp_path):
+    labels = [at("chair", 2, center_x=200), at("cup", 1.2, real_height=0.1)]
+    async with Harness(tmp_path, frames=[textured_frame(size=HD)], labels=labels, texts=[]) as h:
+        spoken = await h.say("ada berapa benda")
+        assert spoken[0] == "Aku melihat 2 benda."

@@ -132,6 +132,7 @@ class Assistant:
             IntentType.CHANGE_LANGUAGE: self._change_language,
             IntentType.DESCRIBE_SCENE: self._describe_scene,
             IntentType.DETECT_OBJECTS: self._detect_objects,
+            IntentType.COUNT_OBJECTS: self._count_objects,
             IntentType.READ_TEXT: self._read_text,
             IntentType.DESCRIBE_DETAIL: self._describe_detail,
             IntentType.READ_DOCUMENT: self._read_document,
@@ -377,6 +378,30 @@ class Assistant:
         else:
             self._show(look.frame)
             self.say("scene_nothing")
+
+    async def _count_objects(self, intent: Intent) -> None:
+        """ "ada berapa orang?" -> the number first, then where they are."""
+        look = await self._look(objects=True, text=False)
+        if look is None:
+            return
+        label = intent.slots.get("label")
+        if label is not None:
+            look.detections = [d for d in look.detections if d.label == label]
+        count = len(look.detections)
+        if label == "person":
+            # "I don't see anyone", never "there is nobody": the camera only
+            # covers part of the surroundings.
+            key = {0: "count_people_none", 1: "count_people_one"}.get(count, "count_people")
+            self.say(key, count=count)
+        elif count:
+            self.say("count_objects", count=count)
+        if count:
+            self.speech.say(self._describe_objects(look, await self._face_boxes(look)), Priority.HIGH)
+        elif label is None:
+            self._show(look.frame)
+            self.say("scene_nothing")
+        else:
+            self._show(look.frame)
 
     async def _read_text(self, intent: Intent) -> None:
         look = await self._look(objects=False, text=True)

@@ -40,6 +40,7 @@ class IntentType(str, Enum):
     RECOGNIZE_FACES = "recognize_faces"
     READ_TEXT = "read_text"
     DETECT_OBJECTS = "detect_objects"
+    COUNT_OBJECTS = "count_objects"
     DESCRIBE_SCENE = "describe_scene"
     DESCRIBE_DETAIL = "describe_detail"
     READ_DOCUMENT = "read_document"
@@ -207,17 +208,27 @@ _RULES: list[tuple[IntentType, re.Pattern[str]]] = [
             r"\b(?:baca|bacakan|bacain|membaca|apa tulisannya|tulisannya apa|tulisan apa|read|what does (?:it|this|that) say)\b"
         ),
     ),
+    # "ada berapa orang?" - only as the whole question, so "berapa orang yang
+    # tinggal di Jakarta?" stays a general question.
+    (
+        IntentType.COUNT_OBJECTS,
+        _rx(
+            r"^(?:ada )?berapa (?:banyak )?(?P<what>orang|benda)"
+            r"(?: (?:di (?:depan|sekitar|sini)(?: saya| aku| ku)?|yang ada(?: di depan)?))?$"
+        ),
+    ),
+    (
+        IntentType.COUNT_OBJECTS,
+        _rx(
+            r"^how many (?P<what>people|persons|objects|things)(?: are)?"
+            r"(?: (?:here|there|in front(?: of me)?|around(?: me)?))?$"
+        ),
+    ),
     (
         IntentType.DETECT_OBJECTS,
         _rx(
             r"\b(?:benda apa|ada benda|deteksi (?:benda|objek)|objek apa|barang apa"
             r"|what objects|detect objects|identify objects|what things)\b"
-            # "ada berapa orang?" - only as the whole question, so "berapa orang
-            # yang tinggal di Jakarta?" stays a general question.
-            r"|^(?:ada )?berapa (?:orang|benda|banyak orang)"
-            r"(?: (?:di (?:depan|sekitar|sini)(?: saya| aku| ku)?|yang ada(?: di depan)?))?$"
-            r"|^how many (?:people|persons|objects|things)(?: are)?"
-            r"(?: (?:here|there|in front(?: of me)?|around(?: me)?))?$"
         ),
     ),
     (
@@ -324,6 +335,8 @@ class IntentRouter:
         if intent_type is IntentType.NAVIGATE:
             dest = groups.get("dest")
             return {"destination": dest} if dest else {}
+        if intent_type is IntentType.COUNT_OBJECTS:
+            return {"label": "person"} if groups.get("what") in ("orang", "people", "persons") else {}
         if intent_type is IntentType.VISUAL_QUESTION:
             return {"question": groups.get("question", "")}
         if intent_type in (IntentType.ENROLL_FACE, IntentType.FORGET_FACE):

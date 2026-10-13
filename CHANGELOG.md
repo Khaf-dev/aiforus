@@ -87,7 +87,9 @@ All notable changes to this project are documented here. The format follows
   answer; it is now always before it.
 - English: "I see 1 faces" → "I see one face".
 - "ada berapa orang" / "how many people" counts with the camera instead of
-  going to the LLM (as the whole question only).
+  going to the LLM (as the whole question only) and answers with the number
+  first: "Aku melihat 2 orang." With nobody in view: "Aku tidak melihat
+  orang di kamera" (never "there is nobody").
 - The LLM no longer announces the date or adds "may be out of date" to
   answers that don't need it.
 - The vision model only uses clock positions 9 to 3 (it had said "jam 6",

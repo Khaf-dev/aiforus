@@ -47,9 +47,10 @@ T = IntentType
         ("orang itu siapa", T.RECOGNIZE_FACES),
         ("ini siapa yang bikin lagunya", T.GENERAL_QUESTION),
         # Second Windows test: counting people went to the LLM.
-        ("ada berapa orang", T.DETECT_OBJECTS),
-        ("berapa orang di depan saya", T.DETECT_OBJECTS),
-        ("how many people are in front of me", T.DETECT_OBJECTS),
+        ("ada berapa orang", T.COUNT_OBJECTS),
+        ("berapa orang di depan saya", T.COUNT_OBJECTS),
+        ("berapa banyak benda", T.COUNT_OBJECTS),
+        ("how many people are in front of me", T.COUNT_OBJECTS),
         ("berapa orang yang tinggal di jakarta", T.GENERAL_QUESTION),
         ("who's there?", T.RECOGNIZE_FACES),
         ("siapa saja yang kamu kenal", T.LIST_FACES),
@@ -189,3 +190,9 @@ def test_visual_question_slot():
     intent = router.parse("Coba lihat, baju ini warna apa?")
     assert intent.type is T.VISUAL_QUESTION
     assert intent.slots["question"] == "baju ini warna apa"
+
+
+def test_count_slot_says_whether_people_were_asked_for():
+    assert router.parse("ada berapa orang").slots == {"label": "person"}
+    assert router.parse("how many people").slots == {"label": "person"}
+    assert router.parse("ada berapa benda").slots == {}
