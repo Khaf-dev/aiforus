@@ -336,3 +336,9 @@ async def test_answers_go_through_the_follow_up_filter(fake_openai, monkeypatch)
 
     monkeypatch.setattr(client.chat.completions, "create", create)
     assert await answerer.answer("ibu kota jepang", "id") == "Tokyo."
+
+
+async def test_llm_knows_its_name(fake_openai):
+    answerer = OpenAIAnswerer(api_key="x", model="m", timeout_s=30, max_tokens=50, assistant_name="Nemo")
+    await answerer.answer("kamu siapa", "id")
+    assert "You are Nemo" in fake_openai.instances[0].requests[0]["messages"][0]["content"]

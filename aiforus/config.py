@@ -34,6 +34,8 @@ class _Section(BaseModel):
 
 class AppSettings(_Section):
     name: str = "AIForUs Vision Assistant"
+    # What the assistant calls itself and answers to ("Hai Nemo, apa di depan?").
+    assistant_name: str = Field("Nemo", min_length=2, max_length=20, pattern=r"^[A-Za-z][A-Za-z ]*$")
     language: LanguageCode = "id"
     data_dir: Path = Path("data")
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"

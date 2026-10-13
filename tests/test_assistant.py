@@ -564,7 +564,7 @@ async def test_run_loop_handles_commands_and_warns_once_when_offline(tmp_path, m
         )
         await asyncio.wait_for(h.assistant.run(listener), 3)
         spoken = h.tts.spoken
-        assert spoken[0].startswith("Asisten siap")
+        assert spoken[0].startswith("Nemo siap")
         assert spoken.count("Pengenalan suara tidak bisa terhubung ke internet. Periksa koneksi.") == 1
         assert spoken[-1] == "Asisten dimatikan. Sampai jumpa."
         assert not h.assistant.running
@@ -929,3 +929,11 @@ async def test_real_gemma_replies_become_clean_sentences(tmp_path, fake_jpeg, ra
     vlm.presence = parse_presence(raw)
     async with Harness(tmp_path, vlm=vlm) as h:
         assert await h.say("apakah ada kunci di meja") == [expected]
+
+
+async def test_assistant_answers_to_its_name(tmp_path):
+    async with Harness(tmp_path) as h:
+        assert await h.say("Nemo?") == ["Ya?"]
+        h.settings.app.assistant_name = "Nemo"
+        spoken = await h.say("hai nemo, bantuan")
+        assert spoken[0].startswith("Ini yang bisa aku lakukan")

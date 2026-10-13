@@ -24,7 +24,8 @@ logger = logging.getLogger(__name__)
 _LANGUAGE_NAMES = {"id": "Bahasa Indonesia", "en": "English"}
 
 SYSTEM_PROMPT = (
-    "You are the voice of AIForUs, an assistant used by blind and low-vision people. "
+    "You are {name}, the voice of AIForUs, an assistant used by blind and low-vision people. "
+    "If asked who you are, say you are {name}. "
     "Today is {today} (mention it only when asked about the date or time). Reply in "
     "{language}. Your reply is read aloud: at most three short sentences, no lists, no "
     "markdown, no URLs. Answer only what was asked: do not offer more help and do not ask "
@@ -181,6 +182,7 @@ class OpenAIAnswerer:
         vision_max_tokens: int = 400,
         vision_timeout_s: float = 60.0,
         today: Callable[[], date] = date.today,
+        assistant_name: str = "Nemo",
     ) -> None:
         try:
             import openai
@@ -200,10 +202,13 @@ class OpenAIAnswerer:
         # Image requests are slower, and the first one also loads the model.
         self._vision_timeout_s = vision_timeout_s
         self._today = today
+        self._name = assistant_name
 
     async def answer(self, question: str, language: str) -> str:
         system = SYSTEM_PROMPT.format(
-            language=_LANGUAGE_NAMES.get(language, "English"), today=english_date(self._today())
+            name=self._name,
+            language=_LANGUAGE_NAMES.get(language, "English"),
+            today=english_date(self._today()),
         )
         response = await self._client.chat.completions.create(
             model=self._model,

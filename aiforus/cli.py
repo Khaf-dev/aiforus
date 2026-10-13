@@ -128,7 +128,7 @@ def build_components(settings: Settings, args: argparse.Namespace, language: str
     s = settings
 
     voice = None if args.mute else _build_voice(c, s, language)
-    c.tts = PrintTTS(voice) if (args.text or args.mute) else voice
+    c.tts = PrintTTS(voice, prefix=s.app.assistant_name) if (args.text or args.mute) else voice
 
     if args.text:
         c.listener = KeyboardInput("Kamu: " if language == "id" else "You: ")
@@ -223,6 +223,7 @@ def _build_answerer(c: Components, s: Settings) -> Any:
             vision_model=s.llm.vision_model,
             vision_max_tokens=s.llm.vision_max_tokens,
             vision_timeout_s=s.llm.vision_timeout_s,
+            assistant_name=s.app.assistant_name,
         ),
     )
     if answerer is not None:

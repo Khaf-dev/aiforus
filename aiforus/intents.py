@@ -31,6 +31,7 @@ class IntentType(str, Enum):
     CONFIRM_YES = "confirm_yes"
     CONFIRM_NO = "confirm_no"
     STOP_SPEAKING = "stop_speaking"
+    ATTENTION = "attention"  # only the assistant's name was said: "Nemo?"
     EXIT = "exit"
     HELP_MENU = "help_menu"
     CHANGE_LANGUAGE = "change_language"
@@ -317,11 +318,38 @@ _LANGUAGE_CODES = {
 }
 
 
+# Greetings that may come before the assistant's name: "hai nemo", "oke nemo".
+_GREETING = r"(?:hai|halo|hallo|hey|hei|hi|hello|oke|ok|eh)"
+
+
 class IntentRouter:
+    def __init__(self, names: tuple[str, ...] | list[str] = ("Nemo",)) -> None:
+        """``names``: what the assistant answers to. "Nemo, apa di depan"
+        is routed as "apa di depan"; "matikan Nemo" exits."""
+        alternatives = "|".join(re.escape(normalize(n)) for n in names if normalize(n))
+        self._wake = (
+            re.compile(rf"^(?:{_GREETING} )?(?:{alternatives})\b[\s,]*", re.IGNORECASE)
+            if alternatives
+            else None
+        )
+        self._exit_by_name = (
+            re.compile(rf"^(?:matikan|tutup|turn off|shut down) (?:{alternatives})$", re.IGNORECASE)
+            if alternatives
+            else None
+        )
+
     def parse(self, utterance: str) -> Intent:
         text = normalize(utterance)
         if not text:
             return Intent(IntentType.EMPTY, text)
+        if self._wake is not None:
+            called = self._wake.match(text)
+            if called:
+                text = text[called.end() :].strip()
+                if not text:
+                    return Intent(IntentType.ATTENTION, "")
+        if self._exit_by_name is not None and self._exit_by_name.match(text):
+            return Intent(IntentType.EXIT, text)
 
         if any(rule.search(text) for rule in _EMERGENCY):
             return Intent(IntentType.EMERGENCY, text)

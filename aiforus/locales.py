@@ -10,7 +10,8 @@ from __future__ import annotations
 MESSAGES: dict[str, dict[str, str]] = {
     "id": {
         # General
-        "ready": "Asisten siap. Katakan 'bantuan' untuk daftar perintah.",
+        "ready": "{name} siap. Katakan 'bantuan' untuk daftar perintah.",
+        "attention": "Ya?",
         "unknown": "Maaf, aku belum paham. Katakan 'bantuan' untuk daftar perintah.",
         "error": "Maaf, terjadi kesalahan. Coba lagi.",
         "help_menu": (
@@ -168,7 +169,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "list_and": "dan",
     },
     "en": {
-        "ready": "Assistant ready. Say 'help menu' for the list of commands.",
+        "ready": "{name} is ready. Say 'help menu' for the list of commands.",
+        "attention": "Yes?",
         "unknown": "Sorry, I didn't understand. Say 'help menu' for the list of commands.",
         "error": "Sorry, something went wrong. Please try again.",
         "help_menu": (

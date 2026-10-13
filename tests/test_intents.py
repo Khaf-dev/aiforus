@@ -217,3 +217,34 @@ def test_find_slot_is_the_object_name():
     assert router.parse("apakah ada sepeda motor di depan?").slots == {"thing": "sepeda motor"}
     assert router.parse("ada motor nggak").slots == {"thing": "motor"}
     assert router.parse("is there a chair in front of me").slots == {"thing": "a chair"}
+
+
+# -- the assistant's name ("Nemo") ----------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "utterance, expected",
+    [
+        ("Nemo, apa di depan?", T.DESCRIBE_SCENE),
+        ("hai nemo apa di depan", T.DESCRIBE_SCENE),
+        ("Halo Nemo, siapa ini", T.RECOGNIZE_FACES),
+        ("nemo tolong", T.EMERGENCY),  # the name never hides an emergency
+        ("nemo darurat", T.EMERGENCY),
+        ("nemo diam", T.STOP_SPEAKING),
+        ("nemo ya", T.CONFIRM_YES),
+        ("matikan nemo", T.EXIT),
+        ("Nemo", T.ATTENTION),
+        ("hai nemo", T.ATTENTION),
+        ("film finding nemo bagus nggak", T.GENERAL_QUESTION),  # the name mid-sentence is just a word
+    ],
+)
+def test_assistant_name(utterance, expected):
+    assert router.parse(utterance).type is expected
+
+
+def test_other_name_from_config():
+    other = IntentRouter(("Sinta",))
+    assert other.parse("hai sinta apa di depan").type is T.DESCRIBE_SCENE
+    assert other.parse("nemo apa di depan").type is T.DESCRIBE_SCENE  # "apa di depan" still matches
+    assert other.parse("matikan sinta").type is T.EXIT
+    assert other.parse("sinta").type is T.ATTENTION

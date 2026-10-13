@@ -6,6 +6,7 @@
 
 app:
   name: "AIForUs Vision Assistant"
+  assistant_name: "Nemo"  # what the assistant is called and answers to ("Hai Nemo, ...")
   language: "id"          # id (Bahasa Indonesia) | en (English)
   data_dir: "data"        # SQLite DB with face data and preferences
   log_level: "INFO"

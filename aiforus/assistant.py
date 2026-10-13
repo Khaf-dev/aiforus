@@ -113,7 +113,7 @@ class Assistant:
         self.settings = settings
         self.speech = speech
         self.tr = translator
-        self.router = router or IntentRouter()
+        self.router = router or IntentRouter((settings.app.assistant_name,))
         self.vision = vision
         self.faces = faces
         self.navigator = navigator
@@ -138,6 +138,7 @@ class Assistant:
             IntentType.STOP_SPEAKING: self._stop_speaking,
             IntentType.EXIT: self._ask_exit,
             IntentType.HELP_MENU: self._help,
+            IntentType.ATTENTION: self._attention,
             IntentType.CHANGE_LANGUAGE: self._change_language,
             IntentType.DESCRIBE_SCENE: self._describe_scene,
             IntentType.DETECT_OBJECTS: self._detect_objects,
@@ -196,7 +197,7 @@ class Assistant:
     # -- main loop ---------------------------------------------------------
 
     async def run(self, listener: SpeechInput) -> None:
-        self.say("ready", Priority.NORMAL)
+        self.say("ready", Priority.NORMAL, name=self.settings.app.assistant_name)
         while self.running and not listener.closed:
             if listener.half_duplex:
                 # Don't transcribe our own voice.
@@ -282,6 +283,9 @@ class Assistant:
     async def _exit(self) -> None:
         await self.speech.say_and_wait(self.tr.t("exit_bye"), Priority.HIGH)
         self.running = False
+
+    async def _attention(self, intent: Intent) -> None:
+        self.say("attention")
 
     async def _help(self, intent: Intent) -> None:
         self.say("help_menu")
