@@ -22,8 +22,10 @@ PRESENCE_SYSTEM_PROMPT = (
 
 PRESENCE_TASK = (
     'Is there {thing} in this photo? Reply with exactly this JSON: {{"visible": "yes" or '
-    '"no" or "unsure", "clock": one of 9, 10, 11, 12, 1, 2, 3 or null, "detail": "at most 8 '
-    'words in {language}, or an empty string"}}. '
+    '"no" or "unsure", "clock": one of 9, 10, 11, 12, 1, 2, 3 or null, "detail": "where it '
+    "is relative to nearby things, at most 8 words in {language} (for example: next to the "
+    "phone), without repeating its name and without saying how clearly you see it; or an "
+    'empty string"}}. '
     'Use "yes" only if you can clearly see it, and give its horizontal position as a clock '
     "position (12 = straight ahead, 3 = right, 9 = left). "
     'Use "unsure" if it might be there but is small, blurry, hidden or cut off, or if you '
@@ -38,6 +40,16 @@ _NEGATION = re.compile(
     re.IGNORECASE,
 )
 _FRONT_CLOCK = {9, 10, 11, 12, 1, 2, 3}
+# "kunci di meja" -> "kunci": where the user asked about is not part of the name.
+_PLACE_PHRASE = re.compile(
+    r"\s+(?:di|pada|dekat|dalam|atas|bawah|on|in|at|near|under|inside|by)\b.*$", re.IGNORECASE
+)
+# "..., terlihat jelas" says nothing useful to someone who can't see.
+_VISIBILITY_REMARK = re.compile(
+    r"[,;]?\s*(?:(?:terlihat|tampak|kelihatan)\s+(?:jelas|dengan jelas)|(?:is\s+)?clearly\s+visible"
+    r"|(?:can be\s+)?seen\s+clearly)\s*$",
+    re.IGNORECASE,
+)
 _MAX_DETAIL_WORDS = 12
 
 
@@ -105,3 +117,17 @@ def parse_presence(text: str) -> Presence:
     if len(detail.split()) > _MAX_DETAIL_WORDS:
         detail = ""  # rambling; the verdict and position are what matter
     return Presence(Verdict.YES, clock, detail.rstrip(".!"))
+
+
+def bare_name(thing: str) -> str:
+    """The object without the place the user asked about: "kunci di meja" -> "kunci"."""
+    return _PLACE_PHRASE.sub("", thing).strip() or thing.strip()
+
+
+def tidy_detail(detail: str, name: str) -> str:
+    """Drop what the speech already says: a leading object name ("Kunci terletak
+    di atas meja") and remarks on visibility ("..., terlihat jelas")."""
+    detail = _VISIBILITY_REMARK.sub("", detail).strip(" ,;.")
+    if name and detail.lower().startswith(name.lower() + " "):
+        detail = detail[len(name) :].strip(" ,;")
+    return detail

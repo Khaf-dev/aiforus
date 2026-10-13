@@ -178,7 +178,8 @@ _RULES: list[tuple[IntentType, re.Pattern[str]]] = [
         IntentType.RECOGNIZE_FACES,
         _rx(
             r"\b(?:siapa (?:ini|itu|dia|di depan(?: saya| aku| ku)?|yang ada di depan|di sini|di sana)"
-            r"|siapa orang(?:nya)? (?:ini|itu|di depan)"
+            r"|siapa (?:orang|pria|wanita|perempuan|laki-laki|cowok|cewek|bapak|ibu|mas|mbak)(?:nya)?"
+            r" (?:ini|itu|tersebut|di depan)"
             # "ini siapa?" - only as the whole question, so "ini siapa yang
             # bikin?" stays a general question.
             r"|^(?:ini|itu|dia|orang ini|orang itu)(?: itu)? siapa(?: ya)?$"

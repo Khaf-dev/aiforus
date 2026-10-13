@@ -28,7 +28,7 @@ from .services.faces import EnrollStatus, FaceMatch, FaceService, normalize_name
 from .services.imaging import encode_jpeg
 from .services.llm import Answerer, VisionAnswerer, VisionTask
 from .services.navigation import NavigationError, NavigationSession, Navigator, describe_step
-from .services.presence import Presence, Verdict
+from .services.presence import Presence, Verdict, bare_name, tidy_detail
 from .services.spatial import face_position, group_placements, place, with_face_distances
 from .services.vision import Look, VisionService, VisionStatus, summarize
 from .speech import Priority, SpeechQueue
@@ -759,17 +759,20 @@ class Assistant:
             self.say("vlm_empty")
 
     def _presence_sentence(self, presence: Presence, thing: str) -> str:
+        """ "Ya. Kunci di jam 3, di samping ponsel." - composed here, not by the model."""
         name = self.tr.object_name(thing)
-        if presence.verdict is Verdict.NOT_VISIBLE:
-            return self.tr.t("presence_not_visible", thing=name)
-        if presence.verdict is Verdict.UNSURE:
+        if presence.verdict is Verdict.UNSURE:  # keeps "di meja": that's what was asked
             return self.tr.t("presence_unsure", thing=name)
+        bare = bare_name(name)
+        if presence.verdict is Verdict.NOT_VISIBLE:
+            return self.tr.t("presence_not_visible", thing=bare)
         if presence.clock is not None:
-            sentence = self.tr.t("presence_yes_at", thing=self.tr.capitalize(name), clock=presence.clock)
+            sentence = self.tr.t("presence_yes_at", thing=self.tr.capitalize(bare), clock=presence.clock)
         else:
-            sentence = self.tr.t("presence_yes", thing=name)
-        if presence.detail:
-            sentence += f" {self.tr.capitalize(presence.detail)}."
+            sentence = self.tr.t("presence_yes", thing=bare)
+        detail = tidy_detail(presence.detail, bare)
+        if detail:
+            sentence = f"{sentence[:-1]}, {detail}."
         return sentence
 
     async def _sound(self, intent: Intent) -> None:

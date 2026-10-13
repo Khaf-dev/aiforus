@@ -51,3 +51,18 @@ def test_yes_keeps_only_front_clock_positions_and_short_details():
     )
     rambling = " ".join(["kata"] * 20)
     assert parse_presence(f'{{"visible": "yes", "clock": 2, "detail": "{rambling}"}}') == Presence(YES, 2, "")
+
+
+def test_bare_name_and_tidy_detail():
+    from aiforus.services.presence import bare_name, tidy_detail
+
+    assert bare_name("kunci di meja") == "kunci"
+    assert bare_name("key on the table") == "key"
+    assert bare_name("sepeda motor") == "sepeda motor"
+    assert tidy_detail("Kunci di atas meja, terlihat jelas", "kunci") == "di atas meja"
+    assert (
+        tidy_detail("Kunci terletak di atas meja, dekat ponsel", "kunci")
+        == "terletak di atas meja, dekat ponsel"
+    )
+    assert tidy_detail("next to the phone, clearly visible", "key") == "next to the phone"
+    assert tidy_detail("terlihat jelas", "kunci") == ""

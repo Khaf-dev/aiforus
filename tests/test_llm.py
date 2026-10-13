@@ -305,3 +305,34 @@ async def test_find_retries_without_json_mode_when_the_server_rejects_it(fake_op
     monkeypatch.setattr(client.chat.completions, "create", create)
     assert (await answerer.find(b"jpeg", "kunci", "id")).verdict is Verdict.NOT_VISIBLE
     assert ["response_format" in r for r in client.requests] == [True, False]
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        # Windows test: gemma3:4b keeps asking back despite the prompt.
+        (
+            "Saya tidak memiliki informasi tentang pria tersebut. Bisakah Anda jelaskan lebih lanjut?",
+            "Saya tidak memiliki informasi tentang pria tersebut.",
+        ),
+        ("Jakarta. Ada lagi? Mau tahu yang lain?", "Jakarta."),
+        ("Apa maksudmu?", "Apa maksudmu?"),  # only a question: keep it
+        ("Ibu kota Jepang adalah Tokyo.", "Ibu kota Jepang adalah Tokyo."),
+    ],
+)
+def test_follow_up_questions_are_dropped(text, expected):
+    from aiforus.services.llm import drop_follow_up_questions
+
+    assert drop_follow_up_questions(text) == expected
+
+
+async def test_answers_go_through_the_follow_up_filter(fake_openai, monkeypatch):
+    answerer = OpenAIAnswerer(api_key="x", model="m", timeout_s=30, max_tokens=50)
+    client = fake_openai.instances[0]
+
+    async def create(**kwargs):
+        message = types.SimpleNamespace(content="Tokyo. Mau tahu yang lain?")
+        return types.SimpleNamespace(choices=[types.SimpleNamespace(message=message)])
+
+    monkeypatch.setattr(client.chat.completions, "create", create)
+    assert await answerer.answer("ibu kota jepang", "id") == "Tokyo."

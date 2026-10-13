@@ -100,6 +100,13 @@ All notable changes to this project are documented here. The format follows
   composes the sentence. Unreadable or self-contradictory replies ("Tidak
   terlihat. Ada kunci di atas meja.") become "Aku tidak yakin …". JSON mode
   is requested where supported, with a fallback for servers without it.
+- Presence answers read naturally: "Ya. Kunci di jam 3, di atas meja."
+  instead of "Kunci di meja di jam 3. Kunci di atas meja, terlihat jelas."
+  (the asked-about place, a repeated name and "clearly visible" remarks are
+  dropped).
+- Follow-up questions the LLM tacks on ("Bisakah Anda jelaskan lebih
+  lanjut?") are removed in code; gemma3:4b ignored the prompt rule.
+- "siapa pria tersebut", "siapa perempuan itu" recognise faces.
 - "ada berapa orang" / "how many people" counts with the camera instead of
   going to the LLM (as the whole question only) and answers with the number
   first: "Aku melihat 2 orang." With nobody in view: "Aku tidak melihat

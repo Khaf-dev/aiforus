@@ -847,7 +847,7 @@ async def test_find_unknown_object_asks_the_vision_model_for_a_verdict(tmp_path,
     vlm = StubVLM()
     vlm.presence = Presence(Verdict.YES, 10, "di samping gelas")
     async with Harness(tmp_path, vlm=vlm) as h:
-        assert await h.say("apakah ada kunci di meja") == ["Ya. Kunci di meja di jam 10. Di samping gelas."]
+        assert await h.say("apakah ada kunci di meja") == ["Ya. Kunci di jam 10, di samping gelas."]
     assert vlm.calls == [(b"jpeg", "find", "id", "kunci di meja")]
 
 
@@ -879,7 +879,7 @@ async def test_lihat_apakah_ada_is_a_presence_check_too(tmp_path, fake_jpeg):
     vlm.presence = Presence(Verdict.NOT_VISIBLE)
     async with Harness(tmp_path, vlm=vlm, language="en") as h:
         assert await h.say("look, is there a key on the table") == [
-            "I don't see key on the table in the photo. That doesn't mean it isn't there."
+            "I don't see key in the photo. That doesn't mean it isn't there."
         ]
         await h.say("lihat, ini uang berapa")  # open questions stay free text
     assert [c[1] for c in vlm.calls][0] == "find"
@@ -902,3 +902,30 @@ async def test_find_object_in_english(tmp_path):
         assert await h.say("are there any buses") == [
             "I don't see any buses on the camera. That doesn't mean there isn't one."
         ]
+
+
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        # Raw replies from gemma3:4b in the Windows test (13 Oct, 18:29-18:31).
+        (
+            '{"visible": "unsure", "clock": 10, "detail": "Tidak terlihat jelas kunci di meja"}',
+            "Aku tidak yakin ada kunci di meja atau tidak. Coba dekatkan kamera atau ubah sudutnya.",
+        ),
+        (
+            '{"visible": "yes", "clock": 6, "detail": "Kunci terletak di atas meja, dekat ponsel."}',
+            "Ya, aku melihat kunci, terletak di atas meja, dekat ponsel.",
+        ),
+        (
+            '{"visible": "yes", "clock": 3, "detail": "Kunci di atas meja, terlihat jelas"}',
+            "Ya. Kunci di jam 3, di atas meja.",
+        ),
+    ],
+)
+async def test_real_gemma_replies_become_clean_sentences(tmp_path, fake_jpeg, raw, expected):
+    from aiforus.services.presence import parse_presence
+
+    vlm = StubVLM()
+    vlm.presence = parse_presence(raw)
+    async with Harness(tmp_path, vlm=vlm) as h:
+        assert await h.say("apakah ada kunci di meja") == [expected]

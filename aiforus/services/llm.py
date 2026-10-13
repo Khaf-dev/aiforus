@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import ipaddress
 import logging
+import re
 from collections.abc import Callable
 from datetime import date
 from enum import Enum
@@ -128,6 +129,16 @@ _MONTHS = (
 )  # fmt: skip
 
 
+def drop_follow_up_questions(text: str) -> str:
+    """Remove questions the model tacks on at the end ("Bisakah Anda jelaskan
+    lebih lanjut?"). gemma3:4b does it despite the prompt; a voice user can't
+    easily answer them. A reply that is only a question is kept."""
+    sentences = [s for s in re.split(r"(?<=[.!?])\s+", text.strip()) if s]
+    while len(sentences) > 1 and sentences[-1].rstrip().endswith("?"):
+        sentences.pop()
+    return " ".join(sentences)
+
+
 def english_date(day: date) -> str:
     """ "Tuesday, 13 October 2026" - independent of the OS locale."""
     return f"{_WEEKDAYS[day.weekday()]}, {day.day} {_MONTHS[day.month - 1]} {day.year}"
@@ -204,7 +215,7 @@ class OpenAIAnswerer:
             max_tokens=self._max_tokens,
             timeout=self._timeout_s,
         )
-        return (response.choices[0].message.content or "").strip()
+        return drop_follow_up_questions(response.choices[0].message.content or "")
 
     async def look(
         self, image_jpeg: bytes, task: VisionTask, language: str, question: str | None = None
@@ -238,7 +249,7 @@ class OpenAIAnswerer:
             max_tokens=self._vision_max_tokens,
             timeout=self._vision_timeout_s,
         )
-        return (response.choices[0].message.content or "").strip()
+        return drop_follow_up_questions(response.choices[0].message.content or "")
 
     async def find(self, image_jpeg: bytes, thing: str, language: str) -> Presence:
         """ "Is there <thing>?" as a JSON verdict (see :mod:`.presence`).
